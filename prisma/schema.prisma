@@ -7,13 +7,16 @@ datasource db {
   provider = "postgresql"
 }
 
-/* =========================================================
-   ENUM'LAR
-========================================================= */
+/**
+ * =========================================================
+ * ENUM'LAR
+ * =========================================================
+ */
 
 enum CariTipi {
   DIGER
   MUSTERI
+  ALICI
   URETICI
   SATICI
   UYE
@@ -26,6 +29,7 @@ enum FaturaTipi {
   SATIS
   ALIS
   ALINAN_HIZMET
+  VERILEN_HIZMET
 }
 
 enum GiderTipi {
@@ -55,6 +59,7 @@ enum ParaBirimi {
   GBP
   RUB
 }
+
 enum FaturaOdemeSekli {
   NAKIT
   EFT_HAVALE
@@ -63,6 +68,7 @@ enum FaturaOdemeSekli {
   CIRO_CEK
   ACIK_HESAP
 }
+
 enum GiderOdemeSekli {
   NAKIT
   EFT_HAVALE
@@ -73,16 +79,6 @@ enum GiderOdemeSekli {
 enum CekTipi {
   ALINAN
   VERILEN
-}
-
-enum CekDurumu {
-  PORTFOYDE
-  BANKADA
-  CIROLANDI
-  TAHSIL_EDILDI
-  ODENDI
-  KARSILIKSIZ
-  IPTAL
 }
 
 enum HareketTipi {
@@ -103,9 +99,41 @@ enum FinansHareketTipi {
   TRANSFER_CIKIS
 }
 
-/* =========================================================
-   ŞİRKET
-========================================================= */
+enum KrediTipi {
+  TAKSITLI
+  SPOT
+  ROTATIF
+}
+
+enum KrediDurumu {
+  AKTIF
+  KAPANDI
+}
+
+enum KullaniciRol {
+  ADMIN
+  BEACH
+  HAL
+  GORUNTULEME
+}
+
+enum CekDurumu {
+  PORTFOYDE
+  BANKADA
+  CIROLANDI
+  TAHSIL_EDILDI
+  ODENDI
+  KARSILIKSIZ
+  IPTAL
+  IADE_EDILDI
+  IADE_ALINDI
+}
+
+/**
+ * =========================================================
+ * ŞİRKET
+ * =========================================================
+ */
 
 model Sirket {
   id        Int      @id @default(autoincrement())
@@ -124,42 +152,65 @@ model Sirket {
   stoklar         Stok[]
   odemeler        YaklasanOdeme[]
   finansHesaplari FinansHesap[]
+  krediler        Kredi[]
 }
 
-/* =========================================================
-   CARİ
-========================================================= */
+/**
+ * =========================================================
+ * CARİ
+ * =========================================================
+ */
+/**
+ * =========================================================
+ * KULLANICI
+ * =========================================================
+ */
+
+model Kullanici {
+  id           Int          @id @default(autoincrement())
+  kullaniciAdi String       @unique
+  sifreHash    String
+  adSoyad      String?
+  rol          KullaniciRol @default(GORUNTULEME)
+  aktif        Boolean      @default(true)
+  sonGirisAt   DateTime?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([rol])
+  @@index([aktif])
+}
 
 model Cari {
-  id           Int      @id @default(autoincrement())
-  sirketId     Int
+  id       Int @id @default(autoincrement())
+  sirketId Int
 
-  atlasKodu    String?
-  unvan        String
-  tip          CariTipi
+  atlasKodu String?
+  unvan     String
+  tip       CariTipi
 
-  yetkili      String?
-  gsm          String?
-  telefon      String?
-  email        String?
+  yetkili String?
+  gsm     String?
+  telefon String?
+  email   String?
 
   vergiNo      String?
   tcNo         String?
   vergiDairesi String?
 
-  adres        String?
-  grupKodu     String?
+  adres    String?
+  grupKodu String?
 
-  acilisBorc   Decimal  @default(0) @db.Decimal(18, 2)
-  acilisAlacak Decimal  @default(0) @db.Decimal(18, 2)
+  acilisBorc   Decimal @default(0) @db.Decimal(18, 2)
+  acilisAlacak Decimal @default(0) @db.Decimal(18, 2)
 
-  notlar       String?
-  aktif        Boolean  @default(true)
+  notlar String?
+  aktif  Boolean @default(true)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sirket            Sirket           @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  sirket            Sirket          @relation(fields: [sirketId], references: [id], onDelete: Cascade)
   hareketler        CariHareket[]
   faturalar         Fatura[]
   giderler          Gider[]
@@ -172,68 +223,72 @@ model Cari {
   @@index([unvan])
 }
 
-/* =========================================================
-   CARİ HAREKET
-========================================================= */
+/**
+ * =========================================================
+ * CARİ HAREKET
+ * =========================================================
+ */
 
 model CariHareket {
-  id        Int         @id @default(autoincrement())
-  cariId    Int
+  id     Int @id @default(autoincrement())
+  cariId Int
 
   tarih     DateTime
   tip       HareketTipi
   islemTuru String?
 
-  aciklama  String
-  belgeNo   String?
+  aciklama String
+  belgeNo  String?
 
-  borc      Decimal     @default(0) @db.Decimal(18, 2)
-  alacak    Decimal     @default(0) @db.Decimal(18, 2)
+  borc   Decimal @default(0) @db.Decimal(18, 2)
+  alacak Decimal @default(0) @db.Decimal(18, 2)
 
-  createdAt DateTime    @default(now())
+  createdAt DateTime @default(now())
 
-  cari      Cari        @relation(fields: [cariId], references: [id], onDelete: Cascade)
+  cari Cari @relation(fields: [cariId], references: [id], onDelete: Cascade)
 
   @@index([cariId, tarih])
 }
 
-/* =========================================================
-   FATURA
-========================================================= */
+/**
+ * =========================================================
+ * FATURA
+ * =========================================================
+ */
 
 model Fatura {
-  id             Int                @id @default(autoincrement())
-  sirketId       Int
-  cariId         Int?
-  finansHesapId  Int?
-  cekId          Int?
+  id            Int  @id @default(autoincrement())
+  sirketId      Int
+  cariId        Int?
+  finansHesapId Int?
+  cekId         Int?
 
-  tip            FaturaTipi
-  odemeSekli     FaturaOdemeSekli   @default(ACIK_HESAP)
-  paraBirimi     ParaBirimi         @default(TRY)
+  tip        FaturaTipi
+  odemeSekli FaturaOdemeSekli @default(ACIK_HESAP)
+  paraBirimi ParaBirimi       @default(TRY)
 
-  faturaNo       String?
+  faturaNo String?
 
-  tarih          DateTime
-  vadeTarihi     DateTime?
+  tarih      DateTime
+  vadeTarihi DateTime?
 
-  aciklama       String?
+  aciklama String?
 
-  araToplam      Decimal            @default(0) @db.Decimal(18, 2)
-  kdvToplam      Decimal            @default(0) @db.Decimal(18, 2)
-  genelToplam    Decimal            @default(0) @db.Decimal(18, 2)
+  araToplam   Decimal @default(0) @db.Decimal(18, 2)
+  kdvToplam   Decimal @default(0) @db.Decimal(18, 2)
+  genelToplam Decimal @default(0) @db.Decimal(18, 2)
 
-  odendi         Boolean            @default(false)
+  odendi Boolean @default(false)
 
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sirket         Sirket             @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  cari           Cari?              @relation(fields: [cariId], references: [id])
-  finansHesap    FinansHesap?       @relation(fields: [finansHesapId], references: [id], onDelete: SetNull)
-  cek            Cek?               @relation(fields: [cekId], references: [id], onDelete: SetNull)
+  sirket      Sirket       @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  cari        Cari?        @relation(fields: [cariId], references: [id])
+  finansHesap FinansHesap? @relation(fields: [finansHesapId], references: [id], onDelete: SetNull)
+  cek         Cek?         @relation(fields: [cekId], references: [id], onDelete: SetNull)
 
-  kalemler       FaturaKalemi[]
+  kalemler FaturaKalemi[]
 
   @@index([sirketId, tip, tarih])
   @@index([cariId])
@@ -243,57 +298,61 @@ model Fatura {
   @@index([odemeSekli])
 }
 
-/* =========================================================
-   FATURA KALEMİ
-========================================================= */
+/**
+ * =========================================================
+ * FATURA KALEMİ
+ * =========================================================
+ */
 
 model FaturaKalemi {
-  id         Int      @id @default(autoincrement())
-  faturaId   Int
-  stokId     Int?
+  id       Int  @id @default(autoincrement())
+  faturaId Int
+  stokId   Int?
 
-  aciklama   String
+  aciklama String
 
-  miktar     Decimal  @default(1) @db.Decimal(18, 3)
+  miktar     Decimal @default(1) @db.Decimal(18, 3)
   birim      String?
-  birimFiyat Decimal  @default(0) @db.Decimal(18, 2)
-  kdvOrani   Decimal  @default(0) @db.Decimal(5, 2)
-  toplam     Decimal  @default(0) @db.Decimal(18, 2)
+  birimFiyat Decimal @default(0) @db.Decimal(18, 2)
+  kdvOrani   Decimal @default(0) @db.Decimal(5, 2)
+  toplam     Decimal @default(0) @db.Decimal(18, 2)
 
-  fatura     Fatura   @relation(fields: [faturaId], references: [id], onDelete: Cascade)
-  stok       Stok?    @relation(fields: [stokId], references: [id], onDelete: SetNull)
+  fatura Fatura @relation(fields: [faturaId], references: [id], onDelete: Cascade)
+  stok   Stok?  @relation(fields: [stokId], references: [id], onDelete: SetNull)
 
   @@index([stokId])
 }
 
-/* =========================================================
-   GİDER
-========================================================= */
+/**
+ * =========================================================
+ * GİDER
+ * =========================================================
+ */
 
 model Gider {
-  id            Int               @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   sirketId      Int
   cariId        Int?
   finansHesapId Int?
 
-  tip           GiderTipi
-  odemeSekli    GiderOdemeSekli
+  tip        GiderTipi
+  odemeSekli GiderOdemeSekli
 
-  tarih         DateTime          @default(now())
+  tarih DateTime @default(now())
 
-  aciklama      String
-  belgeNo       String?
-  faturaNo      String?
+  aciklama String
+  belgeNo  String?
+  faturaNo String?
 
-  tutar         Decimal           @db.Decimal(18, 2)
+  tutar Decimal @db.Decimal(18, 2)
 
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sirket        Sirket            @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  cari          Cari?             @relation(fields: [cariId], references: [id], onDelete: SetNull)
-  finansHesap   FinansHesap?      @relation(fields: [finansHesapId], references: [id], onDelete: SetNull)
+  sirket      Sirket       @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  cari        Cari?        @relation(fields: [cariId], references: [id], onDelete: SetNull)
+  finansHesap FinansHesap? @relation(fields: [finansHesapId], references: [id], onDelete: SetNull)
 
   @@index([sirketId, tarih])
   @@index([tip])
@@ -302,279 +361,364 @@ model Gider {
   @@index([finansHesapId])
 }
 
-/* =========================================================
-   ESKİ BANKA HESABI
-========================================================= */
+/**
+ * =========================================================
+ * ESKİ BANKA HESABI
+ * =========================================================
+ */
 
 model BankaHesabi {
-  id           Int      @id @default(autoincrement())
-  sirketId     Int
+  id       Int @id @default(autoincrement())
+  sirketId Int
 
-  bankaAdi     String
-  hesapAdi     String
+  bankaAdi String
+  hesapAdi String
 
-  iban         String?
-  hesapNo      String?
+  iban    String?
+  hesapNo String?
 
-  mevcutBakiye Decimal  @default(0) @db.Decimal(18, 2)
+  mevcutBakiye Decimal @default(0) @db.Decimal(18, 2)
 
-  aktif        Boolean  @default(true)
+  aktif Boolean @default(true)
 
-  createdAt    DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  sirket       Sirket   @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  hareketler   BankaHareket[]
+  sirket     Sirket         @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  hareketler BankaHareket[]
 }
 
-/* =========================================================
-   ESKİ BANKA HAREKET
-========================================================= */
+/**
+ * =========================================================
+ * ESKİ BANKA HAREKET
+ * =========================================================
+ */
 
 model BankaHareket {
-  id        Int         @id @default(autoincrement())
-  bankaId   Int
+  id      Int @id @default(autoincrement())
+  bankaId Int
 
-  tarih     DateTime
-  tip       HareketTipi
+  tarih DateTime
+  tip   HareketTipi
 
-  aciklama  String
-  tutar     Decimal     @db.Decimal(18, 2)
+  aciklama String
+  tutar    Decimal @db.Decimal(18, 2)
 
-  createdAt DateTime    @default(now())
+  createdAt DateTime @default(now())
 
-  banka     BankaHesabi @relation(fields: [bankaId], references: [id], onDelete: Cascade)
+  banka BankaHesabi @relation(fields: [bankaId], references: [id], onDelete: Cascade)
 
   @@index([bankaId, tarih])
 }
 
-/* =========================================================
-   ESKİ KASA
-========================================================= */
+/**
+ * =========================================================
+ * ESKİ KASA
+ * =========================================================
+ */
 
 model Kasa {
-  id           Int      @id @default(autoincrement())
-  sirketId     Int
+  id       Int @id @default(autoincrement())
+  sirketId Int
 
   ad           String
-  mevcutBakiye Decimal  @default(0) @db.Decimal(18, 2)
+  mevcutBakiye Decimal @default(0) @db.Decimal(18, 2)
 
-  aktif        Boolean  @default(true)
+  aktif Boolean @default(true)
 
-  sirket       Sirket   @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  hareketler   KasaHareket[]
+  sirket     Sirket        @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  hareketler KasaHareket[]
 }
 
-/* =========================================================
-   ESKİ KASA HAREKET
-========================================================= */
+/**
+ * =========================================================
+ * ESKİ KASA HAREKET
+ * =========================================================
+ */
 
 model KasaHareket {
-  id        Int         @id @default(autoincrement())
-  kasaId    Int
+  id     Int @id @default(autoincrement())
+  kasaId Int
 
-  tarih     DateTime
-  tip       HareketTipi
+  tarih DateTime
+  tip   HareketTipi
 
-  aciklama  String
-  tutar     Decimal     @db.Decimal(18, 2)
+  aciklama String
+  tutar    Decimal @db.Decimal(18, 2)
 
-  createdAt DateTime    @default(now())
+  createdAt DateTime @default(now())
 
-  kasa      Kasa        @relation(fields: [kasaId], references: [id], onDelete: Cascade)
+  kasa Kasa @relation(fields: [kasaId], references: [id], onDelete: Cascade)
 
   @@index([kasaId, tarih])
 }
 
-/* =========================================================
-   ÇEK
-========================================================= */
+/**
+ * =========================================================
+ * ÇEK
+ * =========================================================
+ */
 
 model Cek {
-  id              Int          @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  sirketId        Int
-  cariId          Int?
-  bankaHesabiId   Int?
-  ciroCariId      Int?
+  sirketId      Int
+  cariId        Int?
+  bankaHesabiId Int?
+  ciroCariId    Int?
 
-  tip             CekTipi
-  durum           CekDurumu    @default(PORTFOYDE)
+  tip   CekTipi
+  durum CekDurumu @default(PORTFOYDE)
 
-  cekNo           String?
-  banka           String?
-  sube            String?
-  hesapNo         String?
-  kesideci        String?
+  cekNo    String?
+  banka    String?
+  sube     String?
+  hesapNo  String?
+  kesideci String?
+
   paraBirimi ParaBirimi @default(TRY)
-  tutar           Decimal      @db.Decimal(18, 2)
-  vadeTarihi      DateTime
 
-  aciklama        String?
+  tutar      Decimal  @db.Decimal(18, 2)
+  vadeTarihi DateTime
 
-  cariIslendi     Boolean      @default(false)
-  bankaIslendi    Boolean      @default(false)
-  ciroCariIslendi Boolean      @default(false)
+  aciklama String?
 
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  /**
+   * Atlas aktarım bilgileri
+   */
+  atlasKayitNo    String?
+  atlasRef        String?
+  atlasAktarimRef String?
 
-  sirket          Sirket       @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  cari            Cari?        @relation(fields: [cariId], references: [id])
-  bankaHesabi     FinansHesap? @relation(fields: [bankaHesabiId], references: [id])
-faturalar   Fatura[]
+  cariIslendi     Boolean @default(false)
+  bankaIslendi    Boolean @default(false)
+  ciroCariIslendi Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sirket      Sirket       @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  cari        Cari?        @relation(fields: [cariId], references: [id])
+  bankaHesabi FinansHesap? @relation(fields: [bankaHesabiId], references: [id])
+  faturalar   Fatura[]
 
   @@index([sirketId, vadeTarihi])
   @@index([durum])
   @@index([cariId])
   @@index([bankaHesabiId])
   @@index([ciroCariId])
+  @@index([atlasKayitNo])
+  @@index([atlasRef])
+  @@index([atlasAktarimRef])
 }
 
-/* =========================================================
-   STOK
-========================================================= */
+/**
+ * =========================================================
+ * STOK
+ * =========================================================
+ */
 
 model Stok {
-  id           Int      @id @default(autoincrement())
-  sirketId     Int
+  id       Int @id @default(autoincrement())
+  sirketId Int
 
-  kod          String
-  ad           String
+  kod String
+  ad  String
 
-  kategori     String?
-  birim        String
+  kategori String?
+  birim    String
 
-  mevcutMiktar Decimal  @default(0) @db.Decimal(18, 3)
+  mevcutMiktar Decimal @default(0) @db.Decimal(18, 3)
 
-  alisFiyati   Decimal  @default(0) @db.Decimal(18, 2)
-  satisFiyati  Decimal  @default(0) @db.Decimal(18, 2)
+  alisFiyati  Decimal @default(0) @db.Decimal(18, 2)
+  satisFiyati Decimal @default(0) @db.Decimal(18, 2)
 
-  minimumStok  Decimal  @default(0) @db.Decimal(18, 3)
+  minimumStok Decimal @default(0) @db.Decimal(18, 3)
 
-  depoBolumu   String?
+  depoBolumu String?
 
-  aktif        Boolean  @default(true)
+  aktif Boolean @default(true)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sirket       Sirket   @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  hareketler   StokHareket[]
+  sirket          Sirket         @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  hareketler      StokHareket[]
   faturaKalemleri FaturaKalemi[]
 
   @@unique([sirketId, kod])
 }
 
-/* =========================================================
-   STOK HAREKET
-========================================================= */
+/**
+ * =========================================================
+ * STOK HAREKET
+ * =========================================================
+ */
 
 model StokHareket {
-  id        Int      @id @default(autoincrement())
-  stokId    Int
+  id     Int @id @default(autoincrement())
+  stokId Int
 
-  tarih     DateTime
+  tarih DateTime
 
-  giris     Decimal  @default(0) @db.Decimal(18, 3)
-  cikis     Decimal  @default(0) @db.Decimal(18, 3)
+  giris Decimal @default(0) @db.Decimal(18, 3)
+  cikis Decimal @default(0) @db.Decimal(18, 3)
 
-  aciklama  String?
-  belgeNo   String?
+  aciklama String?
+  belgeNo  String?
 
   createdAt DateTime @default(now())
 
-  stok      Stok     @relation(fields: [stokId], references: [id], onDelete: Cascade)
+  stok Stok @relation(fields: [stokId], references: [id], onDelete: Cascade)
 
   @@index([stokId, tarih])
 }
 
-/* =========================================================
-   YAKLAŞAN ÖDEME
-========================================================= */
+/**
+ * =========================================================
+ * YAKLAŞAN ÖDEME
+ * =========================================================
+ */
 
 model YaklasanOdeme {
-  id         Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  sirketId   Int
-  cariId     Int?
+  sirketId Int
+  cariId   Int?
 
-  baslik     String
-  aciklama   String?
+  baslik   String
+  aciklama String?
 
-  tutar      Decimal  @db.Decimal(18, 2)
+  tutar Decimal @db.Decimal(18, 2)
 
   vadeTarihi DateTime
 
-  odendi     Boolean  @default(false)
+  odendi Boolean @default(false)
 
-  createdAt  DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  sirket     Sirket   @relation(fields: [sirketId], references: [id], onDelete: Cascade)
-  cari       Cari?    @relation(fields: [cariId], references: [id])
+  sirket Sirket @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  cari   Cari?  @relation(fields: [cariId], references: [id])
 
   @@index([sirketId, vadeTarihi])
 }
 
-/* =========================================================
-   FİNANS HESAP
-========================================================= */
+/**
+ * =========================================================
+ * FİNANS HESAP
+ * =========================================================
+ */
 
 model FinansHesap {
-  id          Int               @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
-  sirketId    Int
+  sirketId Int
 
-  ad          String
-  tip         FinansHesapTipi
-  paraBirimi  ParaBirimi        @default(TRY)
+  ad         String
+  tip        FinansHesapTipi
+  paraBirimi ParaBirimi      @default(TRY)
 
-  bankaAdi    String?
-  iban        String?
-  hesapNo     String?
+  bankaAdi String?
+  iban     String?
+  hesapNo  String?
 
-  aktif       Boolean           @default(true)
+  aktif Boolean @default(true)
 
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  sirket      Sirket            @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  sirket Sirket @relation(fields: [sirketId], references: [id], onDelete: Cascade)
 
-  hareketler  FinansHareket[]
-  cekler      Cek[]
-  giderler    Gider[]
-  faturalar Fatura[]
+  hareketler FinansHareket[]
+  cekler     Cek[]
+  giderler   Gider[]
+  faturalar  Fatura[]
+  krediler   Kredi[]
 
   @@index([sirketId, tip])
   @@index([paraBirimi])
 }
 
-/* =========================================================
-   FİNANS HAREKET
-========================================================= */
+/**
+ * =========================================================
+ * FİNANS HAREKET
+ * =========================================================
+ */
 
 model FinansHareket {
-  id            Int                @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   finansHesapId Int
   cariId        Int?
 
-  tarih         DateTime           @default(now())
+  tarih DateTime @default(now())
 
-  tip           FinansHareketTipi
+  tip FinansHareketTipi
 
-  tutar         Decimal            @db.Decimal(18, 2)
+  tutar Decimal @db.Decimal(18, 2)
 
-  aciklama      String
-  belgeNo       String?
+  aciklama String
+  belgeNo  String?
 
-  transferRef   String?
+  transferRef String?
 
-  createdAt     DateTime           @default(now())
+  createdAt DateTime @default(now())
 
-  finansHesap   FinansHesap        @relation(fields: [finansHesapId], references: [id], onDelete: Cascade)
-  cari          Cari?              @relation(fields: [cariId], references: [id], onDelete: SetNull)
+  finansHesap FinansHesap @relation(fields: [finansHesapId], references: [id], onDelete: Cascade)
+  cari        Cari?       @relation(fields: [cariId], references: [id], onDelete: SetNull)
 
   @@index([finansHesapId, tarih])
   @@index([cariId])
   @@index([transferRef])
+}
+
+/**
+ * =========================================================
+ * KREDİ
+ * =========================================================
+ */
+
+model Kredi {
+  id Int @id @default(autoincrement())
+
+  sirketId      Int
+  finansHesapId Int?
+
+  tip   KrediTipi
+  durum KrediDurumu @default(AKTIF)
+
+  paraBirimi ParaBirimi @default(TRY)
+
+  ad      String
+  krediNo String?
+
+  anaPara   Decimal @db.Decimal(18, 2)
+  kalanBorc Decimal @db.Decimal(18, 2)
+
+  faizOrani Decimal? @db.Decimal(8, 4)
+
+  baslangicTarihi DateTime
+  vadeTarihi      DateTime?
+
+  taksitSayisi       Int?
+  odenenTaksitSayisi Int  @default(0)
+
+  aylikTaksit        Decimal?  @db.Decimal(18, 2)
+  sonrakiOdemeTarihi DateTime?
+
+  krediLimiti     Decimal? @db.Decimal(18, 2)
+  kullanilanLimit Decimal? @db.Decimal(18, 2)
+
+  aciklama String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sirket      Sirket       @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  finansHesap FinansHesap? @relation(fields: [finansHesapId], references: [id], onDelete: SetNull)
+
+  @@index([sirketId, tip])
+  @@index([durum])
+  @@index([vadeTarihi])
+  @@index([sonrakiOdemeTarihi])
+  @@index([finansHesapId])
 }

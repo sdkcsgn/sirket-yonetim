@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
 
 type Props = {
   params: Promise<{
@@ -75,19 +76,43 @@ function hareketIsmi(
     return "Ödeme";
   }
 
-  if (aciklama.startsWith("[Devir Borç]")) {
+  if (
+    aciklama.startsWith(
+      "[Geri Alındı]"
+    )
+  ) {
+    return "Geri Alındı";
+  }
+
+  if (
+    aciklama.startsWith(
+      "[Devir Borç]"
+    )
+  ) {
     return "Devir Borç";
   }
 
-  if (aciklama.startsWith("[Devir Alacak]")) {
+  if (
+    aciklama.startsWith(
+      "[Devir Alacak]"
+    )
+  ) {
     return "Devir Alacak";
   }
 
-  if (aciklama.startsWith("[Alınan Çek]")) {
+  if (
+    aciklama.startsWith(
+      "[Alınan Çek]"
+    )
+  ) {
     return "Alınan Çek";
   }
 
-  if (aciklama.startsWith("[Verilen Çek]")) {
+  if (
+    aciklama.startsWith(
+      "[Verilen Çek]"
+    )
+  ) {
     return "Verilen Çek";
   }
 
@@ -107,7 +132,11 @@ function hareketIsmi(
     return "Ciro Çek İptal";
   }
 
-  if (aciklama.startsWith("[Ciro Çek]")) {
+  if (
+    aciklama.startsWith(
+      "[Ciro Çek]"
+    )
+  ) {
     return "Ciro Çek";
   }
 
@@ -116,11 +145,53 @@ function hareketIsmi(
     : "Alacak";
 }
 
-function temizAciklama(aciklama: string) {
+function temizAciklama(
+  aciklama: string
+) {
   return aciklama.replace(
     /^\[[^\]]+\]\s*/,
     ""
   );
+}
+
+function otomatikCariHareketMi(
+  aciklama: string,
+  islemTuru: string | null
+) {
+  if (
+    aciklama.startsWith("[Satış]") ||
+    aciklama.startsWith("[Alış]") ||
+    aciklama.startsWith("[Tahsilat]") ||
+    aciklama.startsWith("[Ödeme]") ||
+    aciklama.startsWith("[Alınan Çek]") ||
+    aciklama.startsWith("[Verilen Çek]") ||
+    aciklama.startsWith("[Ciro Çek]") ||
+    aciklama.startsWith(
+      "[Ciro Çek Karşılıksız]"
+    ) ||
+    aciklama.startsWith(
+      "[Ciro Çek İptal]"
+    ) ||
+    aciklama.startsWith(
+      "[Geri Alındı]"
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    islemTuru === "GELEN_EFT" ||
+    islemTuru === "GIDEN_EFT" ||
+    islemTuru === "NAKIT_TAHSILAT" ||
+    islemTuru === "NAKIT_ODEME" ||
+    islemTuru === "FINANS_GIRIS" ||
+    islemTuru === "FINANS_CIKIS" ||
+    islemTuru === "FINANS_GERI_AL"
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 export default async function CariDetayPage({
@@ -133,6 +204,293 @@ export default async function CariDetayPage({
   if (!Number.isInteger(cariId)) {
     notFound();
   }
+
+  /*
+    ==================================================
+    CARİ HAREKET GERİ AL
+    ==================================================
+  */
+
+  async function hareketGeriAl(
+    formData: FormData
+  ) {
+    "use server";
+
+    const hareketId = Number(
+      formData.get("hareketId")
+    );
+
+    if (
+      !Number.isInteger(hareketId) ||
+      hareketId <= 0
+    ) {
+      throw new Error(
+        "Geçersiz cari hareketi."
+      );
+    }
+
+    const hareket =
+      await prisma.cariHareket.findUnique({
+        where: {
+          id: hareketId,
+        },
+
+        include: {
+          cari: true,
+        },
+      });
+
+    if (
+      !hareket ||
+      hareket.cariId !== cariId
+    ) {
+      throw new Error(
+        "Cari hareketi bulunamadı."
+      );
+    }
+
+    /*
+      Otomatik hareketleri tek başına
+      ters çevirmiyoruz.
+
+      Çünkü banka/kasa/fatura/çek tarafı
+      da etkilenmiş olabilir.
+
+      Bunlarda Sil kullanılabilir.
+    */
+
+    if (
+      otomatikCariHareketMi(
+        hareket.aciklama,
+        hareket.islemTuru
+      )
+    ) {
+      throw new Error(
+        "Bu hareket otomatik kaynaklıdır. Geri Al yerine Sil kullanabilirsiniz."
+      );
+    }
+
+    const tersTip =
+      hareket.tip === "BORC"
+        ? "ALACAK"
+        : "BORC";
+
+    await prisma.cariHareket.create({
+      data: {
+        cariId:
+          hareket.cariId,
+
+        tarih:
+          new Date(),
+
+        tip:
+          tersTip,
+
+        islemTuru:
+          "CARI_GERI_AL",
+
+        aciklama:
+          `[Geri Alındı] ${hareket.aciklama}`,
+
+        belgeNo:
+          hareket.belgeNo,
+
+        borc:
+          tersTip === "BORC"
+            ? hareket.alacak
+            : 0,
+
+        alacak:
+          tersTip === "ALACAK"
+            ? hareket.borc
+            : 0,
+      },
+    });
+
+    revalidatePath(
+      `/beach/cariler/${cariId}`
+    );
+
+    revalidatePath(
+      "/beach/cariler"
+    );
+
+    revalidatePath(
+      "/beach"
+    );
+  }
+
+  /*
+    ==================================================
+    CARİ HAREKET SİL
+    ==================================================
+
+    Kullanıcı isteği:
+    Tüm cari hareketleri silinebilir.
+  */
+
+  async function hareketSil(
+    formData: FormData
+  ) {
+    "use server";
+
+    const hareketId = Number(
+      formData.get("hareketId")
+    );
+
+    if (
+      !Number.isInteger(hareketId) ||
+      hareketId <= 0
+    ) {
+      throw new Error(
+        "Geçersiz cari hareketi."
+      );
+    }
+
+    const hareket =
+      await prisma.cariHareket.findUnique({
+        where: {
+          id: hareketId,
+        },
+
+        include: {
+          cari: true,
+        },
+      });
+
+    if (
+      !hareket ||
+      hareket.cariId !== cariId
+    ) {
+      throw new Error(
+        "Cari hareketi bulunamadı."
+      );
+    }
+
+    /*
+      --------------------------------------------------
+      EŞLEŞEN KASA/BANKA HAREKETİNİ BUL
+      --------------------------------------------------
+
+      Tahsilat:
+      Cari ALACAK
+      Finans GİRİŞ
+
+      Ödeme:
+      Cari BORÇ
+      Finans ÇIKIŞ
+    */
+
+    let finansHareketId:
+      | number
+      | null = null;
+
+    const tutar =
+      hareket.tip === "ALACAK"
+        ? Number(hareket.alacak)
+        : Number(hareket.borc);
+
+    if (tutar > 0) {
+      const finansTip =
+        hareket.tip === "ALACAK"
+          ? "GIRIS"
+          : "CIKIS";
+
+      const finansHareket =
+        await prisma.finansHareket.findFirst({
+          where: {
+            cariId:
+              hareket.cariId,
+
+            tip:
+              finansTip,
+
+            tutar:
+              hareket.tip === "ALACAK"
+                ? hareket.alacak
+                : hareket.borc,
+
+            tarih:
+              hareket.tarih,
+
+            ...(hareket.belgeNo
+              ? {
+                  belgeNo:
+                    hareket.belgeNo,
+                }
+              : {}),
+          },
+
+          orderBy: {
+            id: "desc",
+          },
+
+          select: {
+            id: true,
+          },
+        });
+
+      if (finansHareket) {
+        finansHareketId =
+          finansHareket.id;
+      }
+    }
+
+    await prisma.$transaction(
+      async (tx) => {
+        /*
+          Eşleşen finans hareketi varsa
+          onu da sil.
+        */
+
+        if (finansHareketId) {
+          await tx.finansHareket.delete({
+            where: {
+              id:
+                finansHareketId,
+            },
+          });
+        }
+
+        /*
+          Cari hareketini sil.
+        */
+
+        await tx.cariHareket.delete({
+          where: {
+            id:
+              hareket.id,
+          },
+        });
+      }
+    );
+
+    revalidatePath(
+      `/beach/cariler/${cariId}`
+    );
+
+    revalidatePath(
+      "/beach/cariler"
+    );
+
+    revalidatePath(
+      "/beach/banka"
+    );
+
+    revalidatePath(
+      "/beach/kasa"
+    );
+
+    revalidatePath(
+      "/beach"
+    );
+  }
+
+  /*
+    ==================================================
+    CARİ VERİLERİ
+    ==================================================
+  */
 
   const cari =
     await prisma.cari.findUnique({
@@ -158,37 +516,63 @@ export default async function CariDetayPage({
     notFound();
   }
 
+  /*
+    ==================================================
+    TOPLAMLAR
+    ==================================================
+  */
+
   const acilisBorc =
     Number(cari.acilisBorc);
 
   const acilisAlacak =
     Number(cari.acilisAlacak);
 
-  let toplamBorc = acilisBorc;
-  let toplamAlacak = acilisAlacak;
+  let toplamBorc =
+    acilisBorc;
 
-  for (const hareket of cari.hareketler) {
-    toplamBorc += Number(
-      hareket.borc
-    );
+  let toplamAlacak =
+    acilisAlacak;
 
-    toplamAlacak += Number(
-      hareket.alacak
-    );
+  for (
+    const hareket of
+      cari.hareketler
+  ) {
+    toplamBorc +=
+      Number(
+        hareket.borc
+      );
+
+    toplamAlacak +=
+      Number(
+        hareket.alacak
+      );
   }
 
   const bakiye =
-    toplamBorc - toplamAlacak;
+    toplamBorc -
+    toplamAlacak;
+
+  /*
+    ==================================================
+    YÜRÜYEN BAKİYE
+    ==================================================
+  */
 
   let yuruyenBakiye =
-    acilisBorc - acilisAlacak;
+    acilisBorc -
+    acilisAlacak;
 
   const hareketler =
     cari.hareketler.map(
       (hareket) => {
         yuruyenBakiye +=
-          Number(hareket.borc) -
-          Number(hareket.alacak);
+          Number(
+            hareket.borc
+          ) -
+          Number(
+            hareket.alacak
+          );
 
         return {
           ...hareket,
@@ -203,9 +587,15 @@ export default async function CariDetayPage({
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-10">
+
+      <div className="mx-auto w-full max-w-[1550px] px-4 py-8 md:px-6">
+
+        {/* BAŞLIK */}
+
         <div className="mb-8 flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+
           <div>
+
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
               Beach & Mağaza
             </p>
@@ -215,8 +605,11 @@ export default async function CariDetayPage({
             </h1>
 
             <div className="mt-4">
+
               <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-sm font-bold text-cyan-400">
-                {cariTipi(cari.tip)}
+                {cariTipi(
+                  cari.tip
+                )}
               </span>
 
               {!cari.aktif && (
@@ -224,10 +617,13 @@ export default async function CariDetayPage({
                   Pasif
                 </span>
               )}
+
             </div>
+
           </div>
 
           <div className="flex flex-wrap gap-3">
+
             <a
               href="/beach/cariler"
               className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 transition hover:bg-slate-900"
@@ -248,31 +644,45 @@ export default async function CariDetayPage({
             >
               + Yeni Hareket
             </a>
+
           </div>
+
         </div>
 
+        {/* ÖZET */}
+
         <div className="grid gap-5 md:grid-cols-3">
+
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
             <p className="text-sm text-slate-400">
               Toplam Borç
             </p>
 
             <p className="mt-3 text-3xl font-black text-red-400">
-              {money(toplamBorc)}
+              {money(
+                toplamBorc
+              )}
             </p>
+
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
             <p className="text-sm text-slate-400">
               Toplam Alacak
             </p>
 
             <p className="mt-3 text-3xl font-black text-emerald-400">
-              {money(toplamAlacak)}
+              {money(
+                toplamAlacak
+              )}
             </p>
+
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+
             <p className="text-sm text-slate-400">
               Güncel Bakiye
             </p>
@@ -286,78 +696,98 @@ export default async function CariDetayPage({
                   : "text-white"
               }`}
             >
-              {money(Math.abs(bakiye))}
+              {money(
+                Math.abs(
+                  bakiye
+                )
+              )}
             </p>
 
             <p className="mt-2 text-sm text-slate-500">
+
               {bakiye > 0
-                ? "Borç bakiyesi"
+                ? "Alacağımız"
                 : bakiye < 0
-                ? "Alacak bakiyesi"
+                ? "Borcumuz"
                 : "Hesap kapalı"}
+
             </p>
+
           </div>
+
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <h2 className="text-xl font-bold">
+        {/* DETAY + HAREKET */}
+
+        <div className="mt-8 grid gap-6 xl:grid-cols-[310px_minmax(0,1fr)]">
+
+          {/* CARİ BİLGİLERİ */}
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+
+            <h2 className="text-lg font-bold">
               Cari Bilgileri
             </h2>
 
-            <div className="mt-7 space-y-6">
+            <div className="mt-6 space-y-5 text-sm">
+
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Atlas Kodu
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {cari.atlasKodu || "-"}
+                  {cari.atlasKodu ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Yetkili
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {cari.yetkili || "-"}
+                  {cari.yetkili ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   GSM
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {cari.gsm || "-"}
+                  {cari.gsm ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Telefon
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {cari.telefon || "-"}
+                  {cari.telefon ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   E-posta
                 </p>
 
                 <p className="mt-1 break-all font-semibold">
-                  {cari.email || "-"}
+                  {cari.email ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Vergi No / T.C.
                 </p>
 
@@ -369,7 +799,7 @@ export default async function CariDetayPage({
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Vergi Dairesi
                 </p>
 
@@ -380,80 +810,105 @@ export default async function CariDetayPage({
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Grup Kodu
                 </p>
 
                 <p className="mt-1 font-semibold">
-                  {cari.grupKodu || "-"}
+                  {cari.grupKodu ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Adres
                 </p>
 
                 <p className="mt-1 whitespace-pre-line font-semibold">
-                  {cari.adres || "-"}
+                  {cari.adres ||
+                    "-"}
                 </p>
               </div>
 
               <div>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs text-slate-500">
                   Notlar
                 </p>
 
                 <p className="mt-1 whitespace-pre-line font-semibold">
-                  {cari.notlar || "-"}
+                  {cari.notlar ||
+                    "-"}
                 </p>
               </div>
+
             </div>
+
           </div>
 
+          {/* HAREKETLER */}
+
           <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-            <div className="flex flex-col gap-4 border-b border-slate-800 p-6 sm:flex-row sm:items-center sm:justify-between">
+
+            <div className="flex flex-col gap-4 border-b border-slate-800 p-5 sm:flex-row sm:items-center sm:justify-between">
+
               <div>
-                <h2 className="text-xl font-bold">
+
+                <h2 className="text-lg font-bold">
                   Cari Hareketleri
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-400">
-                  Tüm borç, alacak, satış,
-                  tahsilat, ödeme ve çek işlemleri
+                <p className="mt-1 text-xs text-slate-400">
+                  Borç, alacak, satış,
+                  tahsilat, ödeme ve çek
+                  hareketleri
                 </p>
+
               </div>
 
               <a
                 href={`/beach/cariler/${cari.id}/hareket-yeni`}
-                className="rounded-xl bg-cyan-500 px-5 py-3 text-center font-black text-slate-950"
+                className="rounded-xl bg-cyan-500 px-4 py-2.5 text-center text-sm font-black text-slate-950"
               >
                 + Yeni Hareket
               </a>
+
             </div>
 
-            <div className="grid gap-4 border-b border-slate-800 bg-slate-950/30 px-6 py-4 sm:grid-cols-3">
+            {/* AÇILIŞ */}
+
+            <div className="grid gap-4 border-b border-slate-800 bg-slate-950/30 px-5 py-4 sm:grid-cols-3">
+
               <div>
+
                 <p className="text-xs text-slate-500">
                   Açılış Borcu
                 </p>
 
                 <p className="mt-1 font-bold text-red-400">
-                  {money(acilisBorc)}
+                  {money(
+                    acilisBorc
+                  )}
                 </p>
+
               </div>
 
               <div>
+
                 <p className="text-xs text-slate-500">
                   Açılış Alacağı
                 </p>
 
                 <p className="mt-1 font-bold text-emerald-400">
-                  {money(acilisAlacak)}
+                  {money(
+                    acilisAlacak
+                  )}
                 </p>
+
               </div>
 
               <div>
+
                 <p className="text-xs text-slate-500">
                   Açılış Bakiyesi
                 </p>
@@ -466,11 +921,15 @@ export default async function CariDetayPage({
                     )
                   )}
                 </p>
+
               </div>
+
             </div>
 
-            {gorunenHareketler.length === 0 ? (
+            {gorunenHareketler.length ===
+            0 ? (
               <div className="p-14 text-center">
+
                 <div className="text-4xl">
                   🧾
                 </div>
@@ -479,154 +938,296 @@ export default async function CariDetayPage({
                   Henüz cari hareketi yok
                 </h3>
 
-                <p className="mt-2 text-slate-400">
-                  İlk borç, alacak, satış,
-                  tahsilat veya ödeme
-                  hareketini ekleyebilirsiniz.
-                </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1000px]">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-left text-sm text-slate-400">
-                      <th className="px-5 py-4">
-                        Tarih
-                      </th>
+              <table className="w-full table-fixed text-xs">
 
-                      <th className="px-5 py-4">
-                        İşlem
-                      </th>
+                <colgroup>
+                  <col className="w-[9%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[23%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[12%]" />
+                  <col className="w-[12%]" />
+                </colgroup>
 
-                      <th className="px-5 py-4">
-                        Açıklama
-                      </th>
+                <thead>
 
-                      <th className="px-5 py-4">
-                        Belge No
-                      </th>
+                  <tr className="border-b border-slate-800 text-left text-slate-400">
 
-                      <th className="px-5 py-4">
-                        Borç
-                      </th>
+                    <th className="px-3 py-3">
+                      Tarih
+                    </th>
 
-                      <th className="px-5 py-4">
-                        Alacak
-                      </th>
+                    <th className="px-3 py-3">
+                      İşlem
+                    </th>
 
-                      <th className="px-5 py-4">
-                        Bakiye
-                      </th>
-                    </tr>
-                  </thead>
+                    <th className="px-3 py-3">
+                      Açıklama
+                    </th>
 
-                  <tbody>
-                    {gorunenHareketler.map(
-                      (hareket) => {
-                        const hareketAdi =
-                          hareketIsmi(
-                            hareket.aciklama,
-                            hareket.tip
-                          );
+                    <th className="px-3 py-3">
+                      Belge
+                    </th>
 
-                        const borc =
-                          Number(
-                            hareket.borc
-                          );
+                    <th className="px-3 py-3 text-right">
+                      Borç
+                    </th>
 
-                        const alacak =
-                          Number(
-                            hareket.alacak
-                          );
+                    <th className="px-3 py-3 text-right">
+                      Alacak
+                    </th>
 
-                        return (
-                          <tr
-                            key={hareket.id}
-                            className="border-b border-slate-800/70 transition hover:bg-slate-800/30"
-                          >
-                            <td className="whitespace-nowrap px-5 py-4 text-slate-300">
-                              {date(
-                                hareket.tarih
-                              )}
-                            </td>
+                    <th className="px-3 py-3 text-right">
+                      Bakiye
+                    </th>
 
-                            <td className="px-5 py-4">
-                              <span
-                                className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${
-                                  hareketAdi ===
-                                  "Ciro Çek"
-                                    ? "bg-violet-500/10 text-violet-400"
-                                    : hareketAdi ===
-                                        "Ciro Çek Karşılıksız" ||
-                                      hareketAdi ===
-                                        "Ciro Çek İptal"
-                                    ? "bg-amber-500/10 text-amber-400"
-                                    : hareket.tip ===
-                                      "BORC"
-                                    ? "bg-red-500/10 text-red-400"
-                                    : "bg-emerald-500/10 text-emerald-400"
-                                }`}
-                              >
-                                {hareketAdi}
-                              </span>
-                            </td>
+                    <th className="px-3 py-3 text-right">
+                      İşlem
+                    </th>
 
-                            <td className="px-5 py-4 font-semibold">
-                              {temizAciklama(
-                                hareket.aciklama
-                              )}
-                            </td>
+                  </tr>
 
-                            <td className="px-5 py-4 text-slate-400">
-                              {hareket.belgeNo ||
-                                "-"}
-                            </td>
+                </thead>
 
-                            <td className="whitespace-nowrap px-5 py-4 font-bold text-red-400">
-                              {borc > 0
-                                ? money(
-                                    borc
-                                  )
-                                : "-"}
-                            </td>
+                <tbody>
 
-                            <td className="whitespace-nowrap px-5 py-4 font-bold text-emerald-400">
-                              {alacak > 0
-                                ? money(
-                                    alacak
-                                  )
-                                : "-"}
-                            </td>
+                  {gorunenHareketler.map(
+                    (hareket) => {
+                      const hareketAdi =
+                        hareketIsmi(
+                          hareket.aciklama,
+                          hareket.tip
+                        );
 
-                            <td
-                              className={`whitespace-nowrap px-5 py-4 font-black ${
-                                hareket.yuruyenBakiye >
-                                0
-                                  ? "text-red-400"
-                                  : hareket.yuruyenBakiye <
-                                    0
-                                  ? "text-emerald-400"
-                                  : "text-white"
+                      const borc =
+                        Number(
+                          hareket.borc
+                        );
+
+                      const alacak =
+                        Number(
+                          hareket.alacak
+                        );
+
+                      const otomatik =
+                        otomatikCariHareketMi(
+                          hareket.aciklama,
+                          hareket.islemTuru
+                        );
+
+                      return (
+                        <tr
+                          key={
+                            hareket.id
+                          }
+                          className="border-b border-slate-800/70 align-top transition hover:bg-slate-800/30"
+                        >
+
+                          {/* TARİH */}
+
+                          <td className="px-3 py-4 text-slate-300">
+                            {date(
+                              hareket.tarih
+                            )}
+                          </td>
+
+                          {/* İŞLEM */}
+
+                          <td className="px-3 py-4">
+
+                            <span
+                              className={`inline-block rounded-full px-2 py-1 text-[10px] font-bold ${
+                                hareketAdi ===
+                                "Ciro Çek"
+                                  ? "bg-violet-500/10 text-violet-400"
+                                  : hareketAdi ===
+                                      "Ciro Çek Karşılıksız" ||
+                                    hareketAdi ===
+                                      "Ciro Çek İptal"
+                                  ? "bg-amber-500/10 text-amber-400"
+                                  : hareket.tip ===
+                                    "BORC"
+                                  ? "bg-red-500/10 text-red-400"
+                                  : "bg-emerald-500/10 text-emerald-400"
                               }`}
                             >
-                              {money(
-                                Math.abs(
-                                  hareket.yuruyenBakiye
+                              {
+                                hareketAdi
+                              }
+                            </span>
+
+                          </td>
+
+                          {/* AÇIKLAMA */}
+
+                          <td className="break-words px-3 py-4 font-semibold leading-5">
+                            {temizAciklama(
+                              hareket.aciklama
+                            )}
+                          </td>
+
+                          {/* BELGE */}
+
+                          <td className="break-words px-3 py-4 text-slate-400">
+                            {hareket.belgeNo ||
+                              "-"}
+                          </td>
+
+                          {/* BORÇ */}
+
+                          <td className="break-words px-3 py-4 text-right font-bold text-red-400">
+
+                            {borc > 0
+                              ? money(
+                                  borc
                                 )
+                              : "-"}
+
+                          </td>
+
+                          {/* ALACAK */}
+
+                          <td className="break-words px-3 py-4 text-right font-bold text-emerald-400">
+
+                            {alacak > 0
+                              ? money(
+                                  alacak
+                                )
+                              : "-"}
+
+                          </td>
+
+                          {/* BAKİYE */}
+
+                          <td
+                            className={`break-words px-3 py-4 text-right font-black ${
+                              hareket.yuruyenBakiye >
+                              0
+                                ? "text-red-400"
+                                : hareket.yuruyenBakiye <
+                                  0
+                                ? "text-emerald-400"
+                                : "text-white"
+                            }`}
+                          >
+                            {money(
+                              Math.abs(
+                                hareket.yuruyenBakiye
+                              )
+                            )}
+                          </td>
+
+                          {/* İŞLEMLER */}
+
+                          <td className="px-2 py-4">
+
+                            <div className="flex flex-col items-end gap-1.5">
+
+                              {!otomatik ? (
+                                <form
+                                  action={
+                                    hareketGeriAl
+                                  }
+                                >
+
+                                  <input
+                                    type="hidden"
+                                    name="hareketId"
+                                    value={
+                                      hareket.id
+                                    }
+                                  />
+
+                                  <button
+                                    type="submit"
+                                    className="w-[70px] rounded-md border border-amber-700 px-2 py-1.5 text-[10px] font-bold text-amber-400 hover:bg-amber-950/30"
+                                  >
+                                    Geri Al
+                                  </button>
+
+                                </form>
+                              ) : (
+                                <span className="rounded-md bg-slate-800 px-2 py-1.5 text-[10px] text-slate-500">
+                                  Otomatik
+                                </span>
                               )}
-                            </td>
-                          </tr>
-                        );
-                      }
-                    )}
-                  </tbody>
-                </table>
-              </div>
+
+                              <form
+                                action={
+                                  hareketSil
+                                }
+                              >
+
+                                <input
+                                  type="hidden"
+                                  name="hareketId"
+                                  value={
+                                    hareket.id
+                                  }
+                                />
+
+                                <button
+                                  type="submit"
+                                  className="w-[70px] rounded-md bg-red-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-red-500"
+                                >
+                                  Sil
+                                </button>
+
+                              </form>
+
+                            </div>
+
+                          </td>
+
+                        </tr>
+                      );
+                    }
+                  )}
+
+                </tbody>
+
+              </table>
             )}
+
           </div>
+
         </div>
 
+        {/* UYARI */}
+
+        <div className="mt-6 rounded-xl border border-red-900/50 bg-red-950/10 p-4">
+
+          <p className="text-sm font-black text-red-400">
+            Cari Hareket Silme
+          </p>
+
+          <p className="mt-1 text-xs leading-5 text-slate-400">
+            Sil butonu seçilen cari hareketini
+            kalıcı olarak kaldırır. Hareket bir
+            kasa veya banka tahsilat/ödemesiyle
+            eşleşiyorsa ilgili finans hareketi de
+            kaldırılır.
+          </p>
+
+          <p className="mt-1 text-xs font-semibold leading-5 text-amber-400">
+            Fatura veya çek kaynaklı hareket
+            silindiğinde kaynak fatura veya çek
+            belgesi sistemde kalabilir. Bu nedenle
+            Sil özellikle yanlış veya test
+            kayıtlarını temizlemek için
+            kullanılmalıdır.
+          </p>
+
+        </div>
+
+        {/* ALT BUTONLAR */}
+
         <div className="mt-8 flex flex-wrap justify-end gap-3">
+
           <a
             href={`/beach/cariler/${cari.id}/duzenle`}
             className="rounded-xl border border-cyan-700 px-5 py-3 font-bold text-cyan-400"
@@ -640,8 +1241,11 @@ export default async function CariDetayPage({
           >
             Sil / Pasife Al
           </a>
+
         </div>
+
       </div>
+
     </main>
   );
 }

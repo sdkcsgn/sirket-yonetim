@@ -37,21 +37,22 @@ export default function YeniCariPage() {
                 Cari Tipi *
               </label>
 
-              <select
-                name="tip"
-                required
-                defaultValue="MUSTERI"
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-500"
-              >
-                <option value="MUSTERI">Müşteri</option>
-                <option value="URETICI">Üretici</option>
-                <option value="SATICI">Satıcı</option>
-                <option value="UYE">Üye</option>
-                <option value="BANKA">Banka</option>
-                <option value="PERSONEL">Personel</option>
-                <option value="YARDIMCI_HESAP">Yardımcı Hesap</option>
-                <option value="DIGER">Diğer</option>
-              </select>
+            <select
+  name="tip"
+  required
+  defaultValue="MUSTERI"
+  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none focus:border-cyan-500"
+>
+  <option value="MUSTERI">Müşteri</option>
+  <option value="ALICI">Alıcı</option>
+  <option value="SATICI">Satıcı</option>
+  <option value="PERSONEL">Personel</option>
+  <option value="URETICI">Üretici</option>
+  <option value="UYE">Üye</option>
+  <option value="BANKA">Banka</option>
+  <option value="YARDIMCI_HESAP">Yardımcı Hesap</option>
+  <option value="DIGER">Diğer</option>
+</select>
             </div>
 
             <div>

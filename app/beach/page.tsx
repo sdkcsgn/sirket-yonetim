@@ -1,783 +1,1708 @@
 import { prisma } from "@/lib/prisma";
+
 import {
+
   tcmbKurlariGetir,
+
   tlKarsiligi,
+
 } from "@/lib/tcmb";
 
 function money(value: number) {
+
   return new Intl.NumberFormat("tr-TR", {
+
     style: "currency",
+
     currency: "TRY",
+
     minimumFractionDigits: 2,
+
     maximumFractionDigits: 2,
+
   }).format(value);
+
 }
 
-function kur(value: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    minimumFractionDigits: 4,
-    maximumFractionDigits: 4,
-  }).format(value);
-}
+type Props = {
+  searchParams: Promise<{
+    donem?: string;
+    baslangic?: string;
+    bitis?: string;
+  }>;
+};
 
-export default async function BeachPage() {
-  const sirket = await prisma.sirket.findUnique({
-    where: {
-      kod: "BEACH",
-    },
-  });
+export default async function HALPage({
+  searchParams,
+}: Props) {
+  const query = await searchParams;
 
-  if (!sirket) {
-    return (
-      <main className="min-h-screen bg-slate-950 p-10 text-white">
-        Beach & Mağaza şirketi bulunamadı.
-      </main>
-    );
-  }
+  const sirket =
 
-  const [
-    finansHesaplari,
-    cariler,
-    faturalar,
-    giderler,
-    kurlar,
-  ] = await Promise.all([
-    prisma.finansHesap.findMany({
+    await prisma.sirket.findUnique({
+
       where: {
-        sirketId: sirket.id,
-        aktif: true,
+
+        kod: "BEACH",
+
       },
-      include: {
-        hareketler: true,
-      },
-    }),
 
-    prisma.cari.findMany({
-      where: {
-        sirketId: sirket.id,
-        aktif: true,
-      },
-      include: {
-        hareketler: true,
-      },
-    }),
-
-    prisma.fatura.findMany({
-      where: {
-        sirketId: sirket.id,
-      },
-      select: {
-        tip: true,
-        genelToplam: true,
-      },
-    }),
-
-    prisma.gider.findMany({
-      where: {
-        sirketId: sirket.id,
-      },
-      select: {
-        tutar: true,
-      },
-    }),
-
-    tcmbKurlariGetir(),
-  ]);
-
-  /* =========================================================
-     FİNANS HESAP BAKİYELERİ
-  ========================================================= */
-
-  const hesapBakiyeleri =
-    finansHesaplari.map((hesap) => {
-      const bakiye =
-        hesap.hareketler.reduce(
-          (toplam, hareket) => {
-            const tutar =
-              Number(hareket.tutar);
-
-            if (
-              hareket.tip === "GIRIS" ||
-              hareket.tip ===
-                "TRANSFER_GIRIS"
-            ) {
-              return toplam + tutar;
-            }
-
-            if (
-              hareket.tip === "CIKIS" ||
-              hareket.tip ===
-                "TRANSFER_CIKIS"
-            ) {
-              return toplam - tutar;
-            }
-
-            return toplam;
-          },
-          0
-        );
-
-      const tlDegeri =
-        tlKarsiligi(
-          bakiye,
-          hesap.paraBirimi,
-          kurlar
-        );
-
-      return {
-        ...hesap,
-        bakiye,
-        tlDegeri,
-      };
     });
 
-  /* =========================================================
-     KASA / BANKA / KREDİ KARTI
-  ========================================================= */
+  if (!sirket) {
 
-  const toplamKasaTl =
-    hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip === "KASA"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.tlDegeri,
-        0
-      );
+    return (
 
-  const toplamBankaTl =
-    hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip === "BANKA"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.tlDegeri,
-        0
-      );
+      <main className="min-h-screen bg-slate-950 p-10 text-white">
 
-  const krediKartiNetTl =
-    hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip ===
-          "KREDI_KARTI"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.tlDegeri,
-        0
-      );
+        Beach & Mağaza şirketi bulunamadı.
 
-  const krediKartiBorcuTl =
-    krediKartiNetTl < 0
-      ? Math.abs(krediKartiNetTl)
-      : 0;
+      </main>
 
-  /* =========================================================
-     DÖVİZ KASA TOPLAMLARI
-  ========================================================= */
+    );
 
-  const dovizKasaToplamlari = {
-    USD: hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip === "KASA" &&
-          hesap.paraBirimi === "USD"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.bakiye,
-        0
-      ),
-
-    EUR: hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip === "KASA" &&
-          hesap.paraBirimi === "EUR"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.bakiye,
-        0
-      ),
-
-    GBP: hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip === "KASA" &&
-          hesap.paraBirimi === "GBP"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.bakiye,
-        0
-      ),
-
-    RUB: hesapBakiyeleri
-      .filter(
-        (hesap) =>
-          hesap.tip === "KASA" &&
-          hesap.paraBirimi === "RUB"
-      )
-      .reduce(
-        (toplam, hesap) =>
-          toplam + hesap.bakiye,
-        0
-      ),
-  };
-
-  /* =========================================================
-     CARİ TOPLAMLAR
-  ========================================================= */
-
-  let toplamCariBorc = 0;
-  let toplamCariAlacak = 0;
-
-  for (const cari of cariler) {
-    let borc =
-      Number(cari.acilisBorc);
-
-    let alacak =
-      Number(cari.acilisAlacak);
-
-    for (const hareket of cari.hareketler) {
-      borc += Number(hareket.borc);
-      alacak += Number(hareket.alacak);
-    }
-
-    const bakiye =
-      borc - alacak;
-
-    if (bakiye > 0) {
-      toplamCariAlacak += bakiye;
-    }
-
-    if (bakiye < 0) {
-      toplamCariBorc +=
-        Math.abs(bakiye);
-    }
   }
 
-  /* =========================================================
-     FATURALAR
-  ========================================================= */
+  const donem =
+    query.donem || "TUMU";
 
-  const toplamSatis =
-    faturalar
-      .filter(
-        (fatura) =>
-          fatura.tip === "SATIS"
-      )
-      .reduce(
-        (toplam, fatura) =>
-          toplam +
-          Number(fatura.genelToplam),
-        0
-      );
+  const bugun = new Date();
+  bugun.setHours(0, 0, 0, 0);
 
-  const toplamAlis =
-    faturalar
-      .filter(
-        (fatura) =>
-          fatura.tip === "ALIS"
-      )
-      .reduce(
-        (toplam, fatura) =>
-          toplam +
-          Number(fatura.genelToplam),
-        0
-      );
+  let donemBaslangic: Date | null = null;
+  let donemBitis: Date | null = null;
 
-  const toplamAlinanHizmet =
-    faturalar
-      .filter(
-        (fatura) =>
-          fatura.tip ===
-          "ALINAN_HIZMET"
-      )
-      .reduce(
-        (toplam, fatura) =>
-          toplam +
-          Number(fatura.genelToplam),
-        0
-      );
-
-  /* =========================================================
-     GİDERLER
-  ========================================================= */
-
-  const toplamGider =
-    giderler.reduce(
-      (toplam, gider) =>
-        toplam +
-        Number(gider.tutar),
+  if (donem === "BUGUN") {
+    donemBaslangic = new Date(bugun);
+    donemBitis = new Date(bugun);
+    donemBitis.setHours(23, 59, 59, 999);
+  } else if (donem === "AY") {
+    donemBaslangic = new Date(
+      bugun.getFullYear(),
+      bugun.getMonth(),
+      1,
+      0,
+      0,
+      0,
       0
     );
 
-  /* =========================================================
-     NETLER
-  ========================================================= */
+    donemBitis = new Date(
+      bugun.getFullYear(),
+      bugun.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+  } else if (donem === "YIL") {
+    donemBaslangic = new Date(
+      bugun.getFullYear(),
+      0,
+      1,
+      0,
+      0,
+      0,
+      0
+    );
 
-  const netSonuc =
-    toplamSatis -
-    toplamAlis -
-    toplamAlinanHizmet -
-    toplamGider;
+    donemBitis = new Date(
+      bugun.getFullYear(),
+      11,
+      31,
+      23,
+      59,
+      59,
+      999
+    );
+  } else if (donem === "OZEL") {
+    if (query.baslangic) {
+      const baslangic = new Date(
+        `${query.baslangic}T00:00:00`
+      );
 
-  const kasaBankaToplam =
-    toplamKasaTl +
-    toplamBankaTl;
+      if (!Number.isNaN(baslangic.getTime())) {
+        donemBaslangic = baslangic;
+      }
+    }
 
-  const cariNet =
-    toplamCariAlacak -
-    toplamCariBorc;
+    if (query.bitis) {
+      const bitis = new Date(
+        `${query.bitis}T23:59:59.999`
+      );
 
-  const finansalNet =
-    toplamKasaTl +
-    toplamBankaTl -
-    krediKartiBorcuTl +
-    toplamCariAlacak -
-    toplamCariBorc;
+      if (!Number.isNaN(bitis.getTime())) {
+        donemBitis = bitis;
+      }
+    }
+  }
+
+  const tarihAraligindaMi = (tarih: Date) => {
+    if (donemBaslangic && tarih < donemBaslangic) {
+      return false;
+    }
+
+    if (donemBitis && tarih > donemBitis) {
+      return false;
+    }
+
+    return true;
+  };
+
+  const donemAdi =
+    donem === "BUGUN"
+      ? "Bugün"
+      : donem === "AY"
+      ? "Bu Ay"
+      : donem === "YIL"
+      ? "Bu Yıl"
+      : donem === "OZEL"
+      ? "Özel Tarih Aralığı"
+      : "Tüm Zamanlar";
+
+  const seciliBaslangic =
+    query.baslangic || "";
+
+  const seciliBitis =
+    query.bitis || "";
+
+
+
+  const [
+
+    finansHesaplari,
+
+    cariler,
+
+    cekler,
+
+    krediler,
+
+    faturalar,
+
+    giderler,
+
+    kurlar,
+
+  ] = await Promise.all([
+
+    prisma.finansHesap.findMany({
+
+      where: {
+
+        sirketId: sirket.id,
+
+        aktif: true,
+
+      },
+
+      include: {
+
+        hareketler: true,
+
+      },
+
+    }),
+
+    prisma.cari.findMany({
+
+      where: {
+
+        sirketId: sirket.id,
+
+        aktif: true,
+
+      },
+
+      include: {
+
+        hareketler: true,
+
+      },
+
+    }),
+
+    prisma.cek.findMany({
+
+      where: {
+
+        sirketId: sirket.id,
+
+      },
+
+      select: {
+
+        tip: true,
+
+        durum: true,
+
+        tutar: true,
+
+      },
+
+    }),
+
+    prisma.kredi.findMany({
+
+      where: {
+
+        sirketId: sirket.id,
+
+        durum: "AKTIF",
+
+      },
+
+      select: {
+
+        kalanBorc: true,
+
+        paraBirimi: true,
+
+      },
+
+    }),
+
+    prisma.fatura.findMany({
+
+      where: {
+
+        sirketId: sirket.id,
+
+      },
+
+      select: {
+
+        tip: true,
+
+        genelToplam: true,
+
+        paraBirimi: true,
+
+        tarih: true,
+
+      },
+
+    }),
+
+    prisma.gider.findMany({
+
+      where: {
+
+        sirketId: sirket.id,
+
+      },
+
+      select: {
+
+        tutar: true,
+
+        tarih: true,
+
+      },
+
+    }),
+
+    tcmbKurlariGetir(),
+
+  ]);
+
+  /*
+
+    =========================================================
+
+    KASA / BANKA BAKİYELERİ
+
+    =========================================================
+
+  */
+
+  const hesapBakiyeleri =
+
+    finansHesaplari.map(
+
+      (hesap) => {
+
+        const bakiye =
+
+          hesap.hareketler.reduce(
+
+            (toplam, hareket) => {
+
+              const tutar =
+
+                Number(
+
+                  hareket.tutar
+
+                );
+
+              if (
+
+                hareket.tip ===
+
+                  "GIRIS" ||
+
+                hareket.tip ===
+
+                  "TRANSFER_GIRIS"
+
+              ) {
+
+                return (
+
+                  toplam + tutar
+
+                );
+
+              }
+
+              if (
+
+                hareket.tip ===
+
+                  "CIKIS" ||
+
+                hareket.tip ===
+
+                  "TRANSFER_CIKIS"
+
+              ) {
+
+                return (
+
+                  toplam - tutar
+
+                );
+
+              }
+
+              return toplam;
+
+            },
+
+            0
+
+          );
+
+        const tlDegeri =
+
+          tlKarsiligi(
+
+            bakiye,
+
+            hesap.paraBirimi,
+
+            kurlar
+
+          );
+
+        return {
+
+          ...hesap,
+
+          bakiye,
+
+          tlDegeri,
+
+        };
+
+      }
+
+    );
+
+  const toplamKasaTl =
+
+    hesapBakiyeleri
+
+      .filter(
+
+        (hesap) =>
+
+          hesap.tip === "KASA"
+
+      )
+
+      .reduce(
+
+        (toplam, hesap) =>
+
+          toplam +
+
+          hesap.tlDegeri,
+
+        0
+
+      );
+
+  const toplamBankaTl =
+
+    hesapBakiyeleri
+
+      .filter(
+
+        (hesap) =>
+
+          hesap.tip === "BANKA"
+
+      )
+
+      .reduce(
+
+        (toplam, hesap) =>
+
+          toplam +
+
+          hesap.tlDegeri,
+
+        0
+
+      );
+
+  /*
+
+    =========================================================
+
+    CARİ BORÇ / ALACAK
+
+    =========================================================
+
+  */
+
+  let toplamAlacak = 0;
+
+  let toplamBorc = 0;
+
+  for (const cari of cariler) {
+
+    let borc =
+
+      Number(
+
+        cari.acilisBorc
+
+      );
+
+    let alacak =
+
+      Number(
+
+        cari.acilisAlacak
+
+      );
+
+    for (
+
+      const hareket of
+
+        cari.hareketler
+
+    ) {
+
+      borc +=
+
+        Number(
+
+          hareket.borc
+
+        );
+
+      alacak +=
+
+        Number(
+
+          hareket.alacak
+
+        );
+
+    }
+
+    const bakiye =
+
+      borc - alacak;
+
+    if (bakiye > 0) {
+
+      toplamAlacak +=
+
+        bakiye;
+
+    }
+
+    if (bakiye < 0) {
+
+      toplamBorc +=
+
+        Math.abs(
+
+          bakiye
+
+        );
+
+    }
+
+  }
+
+  /*
+
+    =========================================================
+
+    ÇEKLER
+
+    =========================================================
+
+  */
+
+  const toplamAlinanCek =
+
+    cekler
+
+      .filter(
+
+        (cek) =>
+
+          cek.tip ===
+
+            "ALINAN" &&
+
+          (
+
+            cek.durum ===
+
+              "PORTFOYDE" ||
+
+            cek.durum ===
+
+              "BANKADA"
+
+          )
+
+      )
+
+      .reduce(
+
+        (toplam, cek) =>
+
+          toplam +
+
+          Number(
+
+            cek.tutar
+
+          ),
+
+        0
+
+      );
+
+const toplamVerilenCek =
+
+  cekler
+
+    .filter(
+
+      (cek) =>
+
+        cek.tip === "VERILEN" &&
+
+        cek.durum !== "ODENDI" &&
+
+        cek.durum !== "IPTAL" &&
+
+        cek.durum !== "IADE_ALINDI"
+
+    )
+
+    .reduce(
+
+      (toplam, cek) =>
+
+        toplam + Number(cek.tutar),
+
+      0
+
+    );
+
+    /*
+
+    =========================================================
+
+    ANLIK KÂR / ZARAR
+
+    =========================================================
+
+  */
+
+  const donemFaturalari =
+    faturalar.filter((fatura) =>
+      tarihAraligindaMi(fatura.tarih)
+    );
+
+  const donemGiderleri =
+    giderler.filter((gider) =>
+      tarihAraligindaMi(gider.tarih)
+    );
+
+  const faturaTl = (
+  tutar: number,
+  paraBirimi: "TRY" | "USD" | "EUR" | "GBP" | "RUB"
+) =>
+
+    tlKarsiligi(
+
+      tutar,
+
+      paraBirimi,
+
+      kurlar
+
+    );
+
+  const toplamSatis = donemFaturalari
+
+    .filter((fatura) => fatura.tip === "SATIS")
+
+    .reduce(
+
+      (toplam, fatura) =>
+
+        toplam +
+
+        faturaTl(
+
+          Number(fatura.genelToplam),
+
+          fatura.paraBirimi
+
+        ),
+
+      0
+
+    );
+
+  const toplamVerilenHizmet = donemFaturalari
+
+    .filter(
+
+      (fatura) =>
+
+        fatura.tip === "VERILEN_HIZMET"
+
+    )
+
+    .reduce(
+
+      (toplam, fatura) =>
+
+        toplam +
+
+        faturaTl(
+
+          Number(fatura.genelToplam),
+
+          fatura.paraBirimi
+
+        ),
+
+      0
+
+    );
+
+  const toplamAlis = donemFaturalari
+
+    .filter((fatura) => fatura.tip === "ALIS")
+
+    .reduce(
+
+      (toplam, fatura) =>
+
+        toplam +
+
+        faturaTl(
+
+          Number(fatura.genelToplam),
+
+          fatura.paraBirimi
+
+        ),
+
+      0
+
+    );
+
+  const toplamAlinanHizmet = donemFaturalari
+
+    .filter(
+
+      (fatura) =>
+
+        fatura.tip === "ALINAN_HIZMET"
+
+    )
+
+    .reduce(
+
+      (toplam, fatura) =>
+
+        toplam +
+
+        faturaTl(
+
+          Number(fatura.genelToplam),
+
+          fatura.paraBirimi
+
+        ),
+
+      0
+
+    );
+
+  const toplamDigerGider = donemGiderleri.reduce(
+
+    (toplam, gider) =>
+
+      toplam + Number(gider.tutar),
+
+    0
+
+  );
+
+  const toplamGelir =
+
+    toplamSatis +
+
+    toplamVerilenHizmet;
+
+  const toplamMaliyetVeGider =
+
+    toplamAlis +
+
+    toplamAlinanHizmet +
+
+    toplamDigerGider;
+
+  const netKarZarar =
+
+    toplamGelir -
+
+    toplamMaliyetVeGider;
+
+  const karMi =
+
+    netKarZarar >= 0;
+
+/*
+
+    =========================================================
+
+    KREDİLER
+
+    =========================================================
+
+  */
+
+  const toplamKrediBorcu =
+
+    krediler.reduce(
+
+      (toplam, kredi) =>
+
+        toplam +
+
+        tlKarsiligi(
+
+          Number(
+
+            kredi.kalanBorc
+
+          ),
+
+          kredi.paraBirimi,
+
+          kurlar
+
+        ),
+
+      0
+
+    );
+
+  /*
+
+    =========================================================
+
+    ÖZET KARTLARI
+
+    =========================================================
+
+  */
 
   const kartlar = [
-    {
-      baslik: "Banka",
-      deger: toplamBankaTl,
-      aciklama:
-        "TL karşılığı toplam banka",
-      renk:
-        toplamBankaTl >= 0
-          ? "text-cyan-400"
-          : "text-red-400",
-    },
 
     {
-      baslik: "Kasa",
-      deger: toplamKasaTl,
-      aciklama:
-        "Döviz dahil TL karşılığı",
-      renk:
-        toplamKasaTl >= 0
-          ? "text-emerald-400"
-          : "text-red-400",
-    },
 
-    {
-      baslik:
-        "Kredi Kartı Borcu",
-      deger:
-        krediKartiBorcuTl,
-      aciklama:
-        "TL karşılığı kart borcu",
-      renk:
-        krediKartiBorcuTl > 0
-          ? "text-orange-400"
-          : "text-slate-300",
-    },
-
-    {
       baslik: "Alacak",
+
       deger:
-        toplamCariAlacak,
-      aciklama:
-        "Carilerden alacak",
+
+        toplamAlacak,
+
       renk:
+
         "text-emerald-400",
+
     },
 
     {
+
       baslik: "Borç",
+
       deger:
-        toplamCariBorc,
-      aciklama:
-        "Toplam cari borç",
+
+        toplamBorc,
+
       renk:
+
         "text-red-400",
+
     },
+
+    {
+
+      baslik: "Kasa",
+
+      deger:
+
+        toplamKasaTl,
+
+      renk:
+
+        toplamKasaTl >= 0
+
+          ? "text-emerald-400"
+
+          : "text-red-400",
+
+    },
+
+    {
+
+      baslik: "Banka",
+
+      deger:
+
+        toplamBankaTl,
+
+      renk:
+
+        toplamBankaTl >= 0
+
+          ? "text-cyan-400"
+
+          : "text-red-400",
+
+    },
+
+    {
+
+      baslik:
+
+        "Alınan Çek",
+
+      deger:
+
+        toplamAlinanCek,
+
+      renk:
+
+        "text-emerald-400",
+
+    },
+
+    {
+
+      baslik:
+
+        "Verilen Çek",
+
+      deger:
+
+        toplamVerilenCek,
+
+      renk:
+
+        "text-orange-400",
+
+    },
+
+    {
+
+      baslik:
+
+        "Kredi Borcu",
+
+      deger:
+
+        toplamKrediBorcu,
+
+      renk:
+
+        "text-violet-400",
+
+    },
+
+  ];
+
+  /*
+
+    =========================================================
+
+    ANA MENÜ
+
+    =========================================================
+
+  */
+
+  const moduller = [
+
+    {
+
+      baslik: "Cari",
+
+      aciklama:
+
+        "Cari kartları, borç, alacak ve ekstre",
+
+      ikon: "👥",
+
+      href:
+
+        "/beach/cariler",
+
+    },
+
+    {
+
+      baslik: "Kasa",
+
+      aciklama:
+
+        "Nakit giriş, çıkış, tahsilat ve ödeme",
+
+      ikon: "💵",
+
+      href:
+
+        "/beach/kasa",
+
+    },
+
+    {
+
+      baslik: "Banka",
+
+      aciklama:
+
+        "Gelen EFT, giden EFT ve banka hareketleri",
+
+      ikon: "🏦",
+
+      href:
+
+        "/beach/banka",
+
+    },
+
+    {
+
+      baslik: "Satış",
+
+      aciklama:
+
+        "Yeni ürün veya hizmet satışı oluştur",
+
+      ikon: "📈",
+
+      href:
+
+        "/beach/faturalar/yeni?tip=SATIS&tur=URUN",
+
+    },
+
+    {
+
+      baslik: "Alış",
+
+      aciklama:
+
+        "Yeni ürün veya hizmet alışı oluştur",
+
+      ikon: "📉",
+
+      href:
+
+        "/beach/faturalar/yeni?tip=ALIS&tur=URUN",
+
+    },
+
+    {
+
+      baslik:
+
+        "Faturalar",
+
+      aciklama:
+
+        "Tüm alış, satış ve hizmet faturalarını görüntüle",
+
+      ikon: "🧾",
+
+      href:
+
+        "/beach/faturalar",
+
+    },
+
+    {
+
+      baslik: "Gider",
+
+      aciklama:
+
+        "Günlük işletme giderleri",
+
+      ikon: "💸",
+
+      href:
+
+        "/beach/giderler",
+
+    },
+
+    {
+
+      baslik: "Çekler",
+
+      aciklama:
+
+        "Alınan, verilen ve ciro edilen çekler",
+
+      ikon: "🧾",
+
+      href:
+
+        "/beach/cekler",
+
+    },
+
+    {
+
+      baslik:
+
+        "Krediler",
+
+      aciklama:
+
+        "Taksitli, spot ve rotatif krediler",
+
+      ikon: "💳",
+
+      href:
+
+        "/beach/krediler",
+
+    },
+
+    {
+
+      baslik: "Stok",
+
+      aciklama:
+
+        "Ürün stokları, giriş ve çıkış hareketleri",
+
+      ikon: "📦",
+
+      href:
+
+        "/beach/stok",
+
+    },
+
+    {
+
+      baslik:
+
+        "Atlas Aktar",
+
+      aciklama:
+
+        "Cari ve çek kayıtlarını Excel'den aktar",
+
+      ikon: "📊",
+
+      href:
+
+        "/beach/atlas-aktar",
+
+    },
+
   ];
 
   return (
+
     <main className="min-h-screen bg-slate-950 text-white">
+
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="mb-10 flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
+
+        {/* BAŞLIK */}
+
+        <div className="mb-10 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+
           <div>
+
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
+
               Şirket 01
+
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
+
               Beach & Mağaza
+
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Finans, stok ve ödeme yönetimi
+
+              Finans ve cari yönetimi
+
             </p>
+
           </div>
 
           <a
+
             href="/"
-            className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 hover:bg-slate-900"
+
+            className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 transition hover:bg-slate-900"
+
           >
+
             ← Şirket Seçimi
+
           </a>
+
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-          {kartlar.map((kart) => (
-            <div
-              key={kart.baslik}
-              className="rounded-2xl border border-slate-800 bg-slate-900 p-6"
-            >
-              <p className="text-slate-400">
-                {kart.baslik}
-              </p>
+        {/* ÖZET */}
 
-              <p
-                className={`mt-3 text-3xl font-black ${kart.renk}`}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+
+          {kartlar.map(
+
+            (kart) => (
+
+              <div
+
+                key={
+
+                  kart.baslik
+
+                }
+
+                className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
+
               >
-                {money(kart.deger)}
-              </p>
 
-              <p className="mt-2 text-sm text-slate-500">
-                {kart.aciklama}
-              </p>
-            </div>
-          ))}
+                <p className="text-sm font-semibold text-slate-400">
+
+                  {
+
+                    kart.baslik
+
+                  }
+
+                </p>
+
+                <p
+
+                  className={`mt-3 text-2xl font-black ${kart.renk}`}
+
+                >
+
+                  {money(
+
+                    kart.deger
+
+                  )}
+
+                </p>
+
+              </div>
+
+            )
+
+          )}
+
         </div>
 
-        {/* DÖVİZ KASALARI */}
+                {/* ANLIK KÂR / ZARAR */}
 
-        <div className="mt-7 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-xl font-black">
-                Döviz Kasaları
-              </h2>
+        <div className="mt-10">
 
-              <p className="mt-1 text-sm text-slate-500">
-                TCMB döviz alış kuru ile TL karşılığı
-              </p>
-            </div>
+          <div className="mb-5">
 
-            <p className="text-sm text-slate-500">
-              Kur tarihi: {kurlar.tarih || "Alınamadı"}
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
+
+              Finansal Durum
+
             </p>
+
+            <h2 className="mt-2 text-2xl font-black">
+
+              Anlık Kâr / Zarar
+
+            </h2>
+
+            <p className="mt-1 text-sm leading-6 text-slate-500">
+
+              Satış + verilen hizmet gelirlerinden; alış + alınan hizmet + giderler düşülür.
+
+              Çekler ödeme/tahsilat aracı olduğu için kâr-zarara ikinci kez eklenmez.
+
+            </p>
+
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                USD Kasa
-              </p>
-
-              <p className="mt-2 text-xl font-black">
-                ${dovizKasaToplamlari.USD.toLocaleString("tr-TR")}
-              </p>
-
-              <p className="mt-2 text-sm text-cyan-400">
-                Kur: {kur(kurlar.USD)}
-              </p>
-
-              <p className="mt-1 text-sm text-slate-400">
-                {money(
-                  dovizKasaToplamlari.USD *
-                    kurlar.USD
-                )}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                EUR Kasa
-              </p>
-
-              <p className="mt-2 text-xl font-black">
-                €{dovizKasaToplamlari.EUR.toLocaleString("tr-TR")}
-              </p>
-
-              <p className="mt-2 text-sm text-cyan-400">
-                Kur: {kur(kurlar.EUR)}
-              </p>
-
-              <p className="mt-1 text-sm text-slate-400">
-                {money(
-                  dovizKasaToplamlari.EUR *
-                    kurlar.EUR
-                )}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                GBP Kasa
-              </p>
-
-              <p className="mt-2 text-xl font-black">
-                £{dovizKasaToplamlari.GBP.toLocaleString("tr-TR")}
-              </p>
-
-              <p className="mt-2 text-sm text-cyan-400">
-                Kur: {kur(kurlar.GBP)}
-              </p>
-
-              <p className="mt-1 text-sm text-slate-400">
-                {money(
-                  dovizKasaToplamlari.GBP *
-                    kurlar.GBP
-                )}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                RUB Kasa
-              </p>
-
-              <p className="mt-2 text-xl font-black">
-                ₽{dovizKasaToplamlari.RUB.toLocaleString("tr-TR")}
-              </p>
-
-              <p className="mt-2 text-sm text-cyan-400">
-                Kur: {kur(kurlar.RUB)}
-              </p>
-
-              <p className="mt-1 text-sm text-slate-400">
-                {money(
-                  dovizKasaToplamlari.RUB *
-                    kurlar.RUB
-                )}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* MENÜ */}
-
-        <div className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          <a
-            href="/beach/cariler"
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:border-cyan-700"
-          >
-            <div className="text-3xl">
-              👥
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black">
-              Cari Hesaplar
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              Müşteri ve tedarikçi borç/alacak takibi
+          <div className="mb-5">
+            <p className="mb-3 text-sm font-bold text-cyan-400">
+              Gösterilen dönem: {donemAdi}
             </p>
-          </a>
 
-          <a
-            href="/beach/kasa-banka"
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:border-cyan-700"
-          >
-            <div className="text-3xl">
-              🏦
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black">
-              Kasa & Banka
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              TL ve döviz hesapları
-            </p>
-          </a>
-
-          <a
-            href="/beach/giderler"
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:border-red-700"
-          >
-            <div className="text-3xl">
-              💸
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black">
-              Giderler
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              Toplam gider: {money(toplamGider)}
-            </p>
-          </a>
-
-          <a
-            href="/beach/cekler"
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:border-cyan-700"
-          >
-            <div className="text-3xl">
-              🧾
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black">
-              Çekler
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              Alınan ve verilen çeklerin takibi
-            </p>
-          </a>
-
-          <a
-            href="/beach/stok"
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:border-cyan-700"
-          >
-            <div className="text-3xl">
-              📦
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black">
-              Stok
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              Mağaza ve işletme stok yönetimi
-            </p>
-          </a>
-
-          <a
-            href="/beach/yaklasan-odemeler"
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:border-cyan-700"
-          >
-            <div className="text-3xl">
-              📅
-            </div>
-
-            <h2 className="mt-5 text-2xl font-black">
-              Yaklaşan Ödemeler
-            </h2>
-
-            <p className="mt-2 text-slate-400">
-              Vadesi yaklaşan borç ve çekler
-            </p>
-          </a>
-        </div>
-
-        {/* KAR / ZARAR */}
-
-        <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-xl font-black">
-            Kâr / Zarar Özeti
-          </h2>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Satış
-              </p>
-
-              <p className="mt-2 text-2xl font-black text-emerald-400">
-                {money(toplamSatis)}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Alış
-              </p>
-
-              <p className="mt-2 text-2xl font-black text-red-400">
-                {money(toplamAlis)}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Alınan Hizmet
-              </p>
-
-              <p className="mt-2 text-2xl font-black text-orange-400">
-                {money(toplamAlinanHizmet)}
-              </p>
-            </div>
-
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Gider
-              </p>
-
-              <p className="mt-2 text-2xl font-black text-red-400">
-                {money(toplamGider)}
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Net Sonuç
-              </p>
-
-              <p
-                className={`mt-2 text-2xl font-black ${
-                  netSonuc >= 0
-                    ? "text-emerald-400"
-                    : "text-red-400"
+            <div className="flex flex-wrap gap-2">
+              <a
+                href="/beach?donem=BUGUN"
+                className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                  donem === "BUGUN"
+                    ? "bg-cyan-500 text-slate-950"
+                    : "border border-slate-700 text-slate-300 hover:bg-slate-900"
                 }`}
               >
-                {money(netSonuc)}
-              </p>
+                Bugün
+              </a>
+
+              <a
+                href="/beach?donem=AY"
+                className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                  donem === "AY"
+                    ? "bg-cyan-500 text-slate-950"
+                    : "border border-slate-700 text-slate-300 hover:bg-slate-900"
+                }`}
+              >
+                Bu Ay
+              </a>
+
+              <a
+                href="/beach?donem=YIL"
+                className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                  donem === "YIL"
+                    ? "bg-cyan-500 text-slate-950"
+                    : "border border-slate-700 text-slate-300 hover:bg-slate-900"
+                }`}
+              >
+                Bu Yıl
+              </a>
+
+              <a
+                href="/beach"
+                className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                  donem === "TUMU"
+                    ? "bg-cyan-500 text-slate-950"
+                    : "border border-slate-700 text-slate-300 hover:bg-slate-900"
+                }`}
+              >
+                Tümü
+              </a>
             </div>
           </div>
-        </div>
 
-        {/* FİNANS ÖZETİ */}
+          <form
+            method="GET"
+            className="mb-6 grid gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 md:grid-cols-[1fr_1fr_auto] md:items-end"
+          >
+            <input
+              type="hidden"
+              name="donem"
+              value="OZEL"
+            />
 
-        <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-          <h2 className="text-xl font-black">
-            Finans Özeti
-          </h2>
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Başlangıç Tarihi
+              </label>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Kasa + Banka
-              </p>
-
-              <p className="mt-2 text-2xl font-black">
-                {money(kasaBankaToplam)}
-              </p>
+              <input
+                type="date"
+                name="baslangic"
+                defaultValue={seciliBaslangic}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500"
+              />
             </div>
 
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Kredi Kartı Borcu
-              </p>
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-500">
+                Bitiş Tarihi
+              </label>
 
-              <p className="mt-2 text-2xl font-black text-orange-400">
-                {money(krediKartiBorcuTl)}
-              </p>
+              <input
+                type="date"
+                name="bitis"
+                defaultValue={seciliBitis}
+                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500"
+              />
             </div>
 
-            <div className="rounded-xl bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Cari Net
+            <button
+              type="submit"
+              className="rounded-xl bg-cyan-500 px-5 py-3 font-black text-slate-950 transition hover:bg-cyan-400"
+            >
+              Tarihi Uygula
+            </button>
+          </form>
+
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+            <div className="rounded-2xl border border-emerald-900/50 bg-emerald-950/10 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Satış Faturaları
+
               </p>
 
-              <p className="mt-2 text-2xl font-black">
-                {money(cariNet)}
+              <p className="mt-3 text-2xl font-black text-emerald-400">
+
+                {money(toplamSatis)}
+
               </p>
+
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-5">
-              <p className="text-sm text-slate-500">
-                Finansal Net
+            <div className="rounded-2xl border border-sky-900/50 bg-sky-950/10 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Verilen Hizmet
+
               </p>
 
-              <p className="mt-2 text-2xl font-black">
-                {money(finansalNet)}
+              <p className="mt-3 text-2xl font-black text-sky-400">
+
+                {money(toplamVerilenHizmet)}
+
               </p>
+
             </div>
+
+            <div className="rounded-2xl border border-emerald-700 bg-slate-900 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Toplam Gelir
+
+              </p>
+
+              <p className="mt-3 text-2xl font-black text-emerald-400">
+
+                {money(toplamGelir)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-2xl border border-orange-900/50 bg-orange-950/10 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Alış Faturaları
+
+              </p>
+
+              <p className="mt-3 text-2xl font-black text-orange-400">
+
+                {money(toplamAlis)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-2xl border border-violet-900/50 bg-violet-950/10 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Alınan Hizmet
+
+              </p>
+
+              <p className="mt-3 text-2xl font-black text-violet-400">
+
+                {money(toplamAlinanHizmet)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-2xl border border-red-900/50 bg-red-950/10 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Diğer Giderler
+
+              </p>
+
+              <p className="mt-3 text-2xl font-black text-red-400">
+
+                {money(toplamDigerGider)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-2xl border border-red-700 bg-slate-900 p-5">
+
+              <p className="text-sm font-semibold text-slate-400">
+
+                Toplam Maliyet + Gider
+
+              </p>
+
+              <p className="mt-3 text-2xl font-black text-red-400">
+
+                {money(toplamMaliyetVeGider)}
+
+              </p>
+
+            </div>
+
+            <div
+
+              className={`rounded-2xl border p-5 ${
+
+                karMi
+
+                  ? "border-emerald-500 bg-emerald-950/20"
+
+                  : "border-red-500 bg-red-950/20"
+
+              }`}
+
+            >
+
+              <p className="text-sm font-black uppercase tracking-wide text-slate-300">
+
+                {karMi ? "NET KÂR" : "NET ZARAR"}
+
+              </p>
+
+              <p
+
+                className={`mt-3 text-3xl font-black ${
+
+                  karMi
+
+                    ? "text-emerald-400"
+
+                    : "text-red-400"
+
+                }`}
+
+              >
+
+                {money(Math.abs(netKarZarar))}
+
+              </p>
+
+              <p className="mt-2 text-xs leading-5 text-slate-400">
+
+                (Satış + Verilen Hizmet) - (Alış + Alınan Hizmet + Gider)
+
+              </p>
+
+            </div>
+
           </div>
+
+          <p className="mt-6 mb-3 text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
+            Anlık durum — dönem filtresinden bağımsız
+          </p>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+
+                Alınan Çekler
+
+              </p>
+
+              <p className="mt-2 text-xl font-black text-emerald-400">
+
+                {money(toplamAlinanCek)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+
+                Verilen Çekler
+
+              </p>
+
+              <p className="mt-2 text-xl font-black text-orange-400">
+
+                {money(toplamVerilenCek)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+
+                Carilerden Alacağımız
+
+              </p>
+
+              <p className="mt-2 text-xl font-black text-emerald-400">
+
+                {money(toplamAlacak)}
+
+              </p>
+
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+
+                Carilere Borcumuz
+
+              </p>
+
+              <p className="mt-2 text-xl font-black text-red-400">
+
+                {money(toplamBorc)}
+
+              </p>
+
+            </div>
+
+          </div>
+
         </div>
+
+{/* İŞLEMLER */}
+
+        <div className="mt-10">
+
+          <div>
+
+            <h2 className="text-2xl font-black">
+
+              İşlemler
+
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-500">
+
+              Yapmak istediğiniz işlemi seçin.
+
+            </p>
+
+          </div>
+
+          <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+
+            {moduller.map(
+
+              (modul) => (
+
+                <a
+
+                  key={
+
+                    modul.baslik
+
+                  }
+
+                  href={
+
+                    modul.href
+
+                  }
+
+                  className="group rounded-2xl border border-slate-800 bg-slate-900 p-7 transition hover:-translate-y-1 hover:border-cyan-600"
+
+                >
+
+                  <div className="text-4xl">
+
+                    {
+
+                      modul.ikon
+
+                    }
+
+                  </div>
+
+                  <h3 className="mt-5 text-2xl font-black">
+
+                    {
+
+                      modul.baslik
+
+                    }
+
+                  </h3>
+
+                  <p className="mt-2 leading-6 text-slate-400">
+
+                    {
+
+                      modul.aciklama
+
+                    }
+
+                  </p>
+
+                  <div className="mt-6 font-bold text-cyan-400">
+
+                    Aç →
+
+                  </div>
+
+                </a>
+
+              )
+
+            )}
+
+          </div>
+
+        </div>
+
       </div>
+
     </main>
+
   );
+
 }

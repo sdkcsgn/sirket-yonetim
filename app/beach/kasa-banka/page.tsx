@@ -1,13 +1,31 @@
 import { prisma } from "@/lib/prisma";
+import {
+  tcmbKurlariGetir,
+  tlKarsiligi,
+} from "@/lib/tcmb";
 
 function money(value: number) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "TRY",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(value);
 }
 
-export default async function KasaBankaPage() {
+function currencyMoney(
+  value: number,
+  currency: string
+) {
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export default async function KasaPage() {
   const sirket = await prisma.sirket.findUnique({
     where: {
       kod: "BEACH",
@@ -22,73 +40,92 @@ export default async function KasaBankaPage() {
     );
   }
 
-  const hesaplar = await prisma.finansHesap.findMany({
-    where: {
-      sirketId: sirket.id,
-      aktif: true,
-    },
-    include: {
-      hareketler: {
-        orderBy: {
-          tarih: "asc",
+  const [kasalar, kurlar] = await Promise.all([
+    prisma.finansHesap.findMany({
+      where: {
+        sirketId: sirket.id,
+        aktif: true,
+        tip: "KASA",
+      },
+
+      include: {
+        hareketler: {
+          orderBy: {
+            tarih: "desc",
+          },
         },
       },
-    },
-    orderBy: [
-      {
-        tip: "asc",
-      },
-      {
+
+      orderBy: {
         ad: "asc",
       },
-    ],
-  });
+    }),
 
-  const hesaplarBakiyeli = hesaplar.map((hesap) => {
-    const bakiye = hesap.hareketler.reduce((toplam, hareket) => {
-      const tutar = Number(hareket.tutar);
+    tcmbKurlariGetir(),
+  ]);
 
-      if (
-        hareket.tip === "GIRIS" ||
-        hareket.tip === "TRANSFER_GIRIS"
-      ) {
-        return toplam + tutar;
-      }
+  const kasalarBakiyeli = kasalar.map((kasa) => {
+    const bakiye = kasa.hareketler.reduce(
+      (toplam, hareket) => {
+        const tutar = Number(hareket.tutar);
 
-      return toplam - tutar;
-    }, 0);
+        if (
+          hareket.tip === "GIRIS" ||
+          hareket.tip === "TRANSFER_GIRIS"
+        ) {
+          return toplam + tutar;
+        }
+
+        if (
+          hareket.tip === "CIKIS" ||
+          hareket.tip === "TRANSFER_CIKIS"
+        ) {
+          return toplam - tutar;
+        }
+
+        return toplam;
+      },
+      0
+    );
+
+    const tlDegeri = tlKarsiligi(
+      bakiye,
+      kasa.paraBirimi,
+      kurlar
+    );
 
     return {
-      ...hesap,
+      ...kasa,
       bakiye,
+      tlDegeri,
     };
   });
 
-  const toplamKasa = hesaplarBakiyeli
-    .filter((hesap) => hesap.tip === "KASA")
-    .reduce((toplam, hesap) => toplam + hesap.bakiye, 0);
-
-  const toplamBanka = hesaplarBakiyeli
-    .filter((hesap) => hesap.tip === "BANKA")
-    .reduce((toplam, hesap) => toplam + hesap.bakiye, 0);
-
-  const toplamVarlik = toplamKasa + toplamBanka;
+  const toplamKasaTl = kasalarBakiyeli.reduce(
+    (toplam, kasa) =>
+      toplam + kasa.tlDegeri,
+    0
+  );
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
       <div className="mx-auto max-w-7xl px-6 py-10">
+
+        {/* BAŞLIK */}
+
         <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
+            <p className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-400">
               Beach & Mağaza
             </p>
 
             <h1 className="mt-2 text-4xl font-black">
-              Kasa & Banka
+              Kasa
             </h1>
 
             <p className="mt-2 text-slate-400">
-              Nakit, banka ve hesaplar arası para hareketleri
+              Nakit kasalar, manuel giriş/çıkış,
+              tahsilat ve ödeme işlemleri
             </p>
           </div>
 
@@ -102,141 +139,251 @@ export default async function KasaBankaPage() {
 
             <a
               href="/beach/kasa-banka/yeni?tip=KASA"
-              className="rounded-xl border border-cyan-700 px-5 py-3 font-bold text-cyan-400"
+              className="rounded-xl border border-emerald-700 px-5 py-3 font-bold text-emerald-400 hover:bg-emerald-950/30"
             >
               + Yeni Kasa
             </a>
 
             <a
-              href="/beach/kasa-banka/yeni?tip=BANKA"
-              className="rounded-xl bg-cyan-500 px-5 py-3 font-black text-slate-950"
+              href="/beach/kasa-banka/hareket-yeni?tip=GIRIS"
+              className="rounded-xl bg-emerald-500 px-5 py-3 font-black text-slate-950 hover:bg-emerald-400"
             >
-              + Yeni Banka
+              + Kasa Girişi
             </a>
+
             <a
-  href="/beach/kasa-banka/transfer"
-  className="rounded-xl border border-amber-600 px-5 py-3 font-bold text-amber-400"
->
-  ↔ Hesaplar Arası Transfer
-</a>
+              href="/beach/kasa-banka/hareket-yeni?tip=CIKIS"
+              className="rounded-xl border border-red-700 px-5 py-3 font-bold text-red-400 hover:bg-red-950/30"
+            >
+              − Kasa Çıkışı
+            </a>
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-3">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <p className="text-sm text-slate-400">
-              Toplam Kasa
-            </p>
+        {/* TOPLAM KASA */}
 
-            <p className="mt-3 text-3xl font-black text-emerald-400">
-              {money(toplamKasa)}
-            </p>
-          </div>
+        <div className="mb-8 rounded-3xl border border-emerald-900/50 bg-emerald-950/10 p-8">
+          <p className="text-sm font-semibold uppercase tracking-[0.15em] text-slate-400">
+            Toplam Kasa
+          </p>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <p className="text-sm text-slate-400">
-              Toplam Banka
-            </p>
+          <p
+            className={`mt-3 text-4xl font-black md:text-5xl ${
+              toplamKasaTl >= 0
+                ? "text-emerald-400"
+                : "text-red-400"
+            }`}
+          >
+            {money(toplamKasaTl)}
+          </p>
 
-            <p className="mt-3 text-3xl font-black text-cyan-400">
-              {money(toplamBanka)}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-            <p className="text-sm text-slate-400">
-              Toplam Varlık
-            </p>
-
-            <p className="mt-3 text-3xl font-black">
-              {money(toplamVarlik)}
-            </p>
-          </div>
+          <p className="mt-3 text-sm text-slate-500">
+            Tüm TL ve döviz kasalarının
+            TCMB kuru ile TL karşılığı
+          </p>
         </div>
 
-        <div className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+        {/* HIZLI İŞLEMLER */}
+
+        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+
+          <a
+            href="/beach/kasa-banka/hareket-yeni?tip=GIRIS"
+            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-emerald-600"
+          >
+            <div className="text-3xl">💵</div>
+
+            <h2 className="mt-4 text-xl font-black">
+              Manuel Giriş
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Kasaya manuel para girişi yap
+            </p>
+          </a>
+
+          <a
+            href="/beach/kasa-banka/hareket-yeni?tip=CIKIS"
+            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-red-600"
+          >
+            <div className="text-3xl">💸</div>
+
+            <h2 className="mt-4 text-xl font-black">
+              Manuel Çıkış
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Kasadan manuel para çıkışı yap
+            </p>
+          </a>
+
+          <a
+            href="/beach/kasa-banka/hareket-yeni?tip=GIRIS"
+            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-cyan-600"
+          >
+            <div className="text-3xl">👤</div>
+
+            <h2 className="mt-4 text-xl font-black">
+              Cari Tahsilat
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Cariden nakit tahsilat al
+            </p>
+          </a>
+
+          <a
+            href="/beach/kasa-banka/hareket-yeni?tip=CIKIS"
+            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-orange-600"
+          >
+            <div className="text-3xl">🤝</div>
+
+            <h2 className="mt-4 text-xl font-black">
+              Cari Ödeme
+            </h2>
+
+            <p className="mt-2 text-sm text-slate-400">
+              Cariye nakit ödeme yap
+            </p>
+          </a>
+        </div>
+
+        {/* TRANSFER */}
+
+        <div className="mb-8">
+          <a
+            href="/beach/kasa-banka/transfer"
+            className="flex items-center justify-between rounded-2xl border border-amber-900/50 bg-amber-950/10 p-6 transition hover:border-amber-600"
+          >
+            <div>
+              <h2 className="text-xl font-black text-amber-400">
+                ↔ Kasa / Banka Transferi
+              </h2>
+
+              <p className="mt-1 text-sm text-slate-400">
+                Kasadan bankaya veya bankadan kasaya para aktar
+              </p>
+            </div>
+
+            <span className="text-2xl text-amber-400">
+              →
+            </span>
+          </a>
+        </div>
+
+        {/* KASALAR */}
+
+        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+
           <div className="border-b border-slate-800 p-6">
-            <h2 className="text-xl font-bold">
-              Finans Hesapları
+            <h2 className="text-xl font-black">
+              Kasalar
             </h2>
 
             <p className="mt-1 text-sm text-slate-400">
-              Kasa ve banka hesaplarının güncel bakiyeleri
+              Tanımlı tüm aktif kasalar
             </p>
           </div>
 
-          {hesaplarBakiyeli.length === 0 ? (
+          {kasalarBakiyeli.length === 0 ? (
             <div className="p-12 text-center">
-              <div className="text-4xl">🏦</div>
+              <div className="text-5xl">
+                💵
+              </div>
 
-              <h3 className="mt-4 text-xl font-bold">
-                Henüz kasa veya banka hesabı yok
+              <h3 className="mt-4 text-xl font-black">
+                Henüz kasa tanımlanmamış
               </h3>
 
               <p className="mt-2 text-slate-400">
-                İlk finans hesabınızı oluşturabilirsiniz.
+                İlk kasanızı oluşturarak başlayabilirsiniz.
               </p>
+
+              <a
+                href="/beach/kasa-banka/yeni?tip=KASA"
+                className="mt-6 inline-block rounded-xl bg-emerald-500 px-6 py-3 font-black text-slate-950"
+              >
+                + Yeni Kasa
+              </a>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[800px]">
+
                 <thead>
                   <tr className="border-b border-slate-800 text-left text-sm text-slate-400">
-                    <th className="px-6 py-4">Hesap</th>
-                    <th className="px-6 py-4">Tip</th>
-                    <th className="px-6 py-4">Banka</th>
-                    <th className="px-6 py-4">IBAN</th>
-                    <th className="px-6 py-4">Bakiye</th>
+                    <th className="px-6 py-4">
+                      Kasa
+                    </th>
+
+                    <th className="px-6 py-4">
+                      Para Birimi
+                    </th>
+
+                    <th className="px-6 py-4 text-right">
+                      Bakiye
+                    </th>
+
+                    <th className="px-6 py-4 text-right">
+                      TL Karşılığı
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  {hesaplarBakiyeli.map((hesap) => (
+                  {kasalarBakiyeli.map((kasa) => (
                     <tr
-                      key={hesap.id}
-                      className="border-b border-slate-800/70"
+                      key={kasa.id}
+                      className="border-b border-slate-800/70 last:border-0"
                     >
-                      <td className="px-6 py-5 font-bold">
-                        {hesap.ad}
+                      <td className="px-6 py-5">
+                        <div className="font-black">
+                          {kasa.ad}
+                        </div>
+
+                        {kasa.hesapNo && (
+                          <div className="mt-1 text-xs text-slate-500">
+                            {kasa.hesapNo}
+                          </div>
+                        )}
                       </td>
 
                       <td className="px-6 py-5">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-bold ${
-                            hesap.tip === "KASA"
-                              ? "bg-emerald-500/10 text-emerald-400"
-                              : "bg-cyan-500/10 text-cyan-400"
-                          }`}
-                        >
-                          {hesap.tip === "KASA"
-                            ? "Kasa"
-                            : "Banka"}
+                        <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold text-emerald-400">
+                          {kasa.paraBirimi}
                         </span>
                       </td>
 
-                      <td className="px-6 py-5 text-slate-300">
-                        {hesap.bankaAdi || "-"}
-                      </td>
-
-                      <td className="px-6 py-5 text-slate-400">
-                        {hesap.iban || "-"}
-                      </td>
-
                       <td
-                        className={`px-6 py-5 text-lg font-black ${
-                          hesap.bakiye >= 0
+                        className={`px-6 py-5 text-right text-lg font-black ${
+                          kasa.bakiye >= 0
                             ? "text-emerald-400"
                             : "text-red-400"
                         }`}
                       >
-                        {money(hesap.bakiye)}
+                        {currencyMoney(
+                          kasa.bakiye,
+                          kasa.paraBirimi
+                        )}
+                      </td>
+
+                      <td
+                        className={`px-6 py-5 text-right font-black ${
+                          kasa.tlDegeri >= 0
+                            ? "text-slate-200"
+                            : "text-red-400"
+                        }`}
+                      >
+                        {money(kasa.tlDegeri)}
                       </td>
                     </tr>
                   ))}
                 </tbody>
+
               </table>
             </div>
           )}
+
         </div>
       </div>
     </main>
