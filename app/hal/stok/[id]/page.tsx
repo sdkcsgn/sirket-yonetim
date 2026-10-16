@@ -385,12 +385,12 @@ export default async function StokDetayPage({
               ← Stok Listesi
             </a>
 
-            <a
-              href={`/hal/stok/${stok.id}/hareket?tip=GIRIS`}
-              className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-emerald-400"
-            >
-              + Stok Girişi
-            </a>
+          <a
+  href={`/hal/stok/${stok.id}`}
+  className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-900"
+>
+  ← Stok Detayı
+</a>
 
             <a
               href={`/hal/stok/${stok.id}/hareket?tip=CIKIS`}

@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 function number(value: number) {
   return new Intl.NumberFormat("tr-TR", {
@@ -16,7 +18,16 @@ function money(value: number) {
   }).format(value);
 }
 
-export default async function StokPage() {
+type Props = {
+  searchParams: Promise<{
+    error?: string;
+  }>;
+};
+
+export default async function StokPage({
+  searchParams,
+}: Props) {
+  const query = await searchParams;
   const sirket = await prisma.sirket.findUnique({
     where: {
       kod: "BEACH",
@@ -30,6 +41,97 @@ export default async function StokPage() {
       </main>
     );
   }
+
+  async function stokSil(formData: FormData) {
+    "use server";
+
+    const stokId = Number(formData.get("stokId"));
+
+    const hata = (mesaj: string): never => {
+      redirect(`/beach/stok?error=${encodeURIComponent(mesaj)}`);
+    };
+
+    if (!Number.isInteger(stokId) || stokId <= 0) {
+      return hata("Geçersiz stok kaydı.");
+    }
+
+    const sirket = await prisma.sirket.findUnique({
+      where: {
+        kod: "BEACH",
+      },
+    });
+
+    if (!sirket) {
+      throw new Error("Beach & Mağaza şirketi bulunamadı.");
+    }
+
+    const stok = await prisma.stok.findFirst({
+      where: {
+        id: stokId,
+        sirketId: sirket.id,
+      },
+    });
+
+    if (!stok) {
+      return hata("Silinecek ürün bulunamadı.");
+    }
+
+    const [hareketSayisi, faturaKalemiSayisi] = await Promise.all([
+      prisma.stokHareket.count({
+        where: {
+          stokId: stok.id,
+        },
+      }),
+      prisma.faturaKalemi.count({
+        where: {
+          stokId: stok.id,
+        },
+      }),
+    ]);
+
+    if (
+      hareketSayisi > 0 ||
+      faturaKalemiSayisi > 0 ||
+      Number(stok.mevcutMiktar) !== 0
+    ) {
+      return hata(
+        `${stok.kod} - ${stok.ad} silinmedi. Ürünün stok hareketi, fatura geçmişi veya mevcut miktarı var. Geçmiş kayıtları korumak için ürünü düzenleyin ya da pasife alın.`
+      );
+    }
+
+    await prisma.stok.delete({
+      where: {
+        id: stok.id,
+      },
+    });
+
+    revalidatePath("/beach");
+    revalidatePath("/beach/stok");
+    revalidatePath("/beach/yonetim/stok");
+    revalidatePath("/beach/faturalar/yeni");
+
+    redirect("/beach/stok");
+  }
+
+  const hareketler = await prisma.stokHareket.findMany({
+    where: {
+      stok: {
+        sirketId: sirket.id,
+      },
+    },
+    include: {
+      stok: true,
+    },
+    orderBy: [
+      {
+        tarih: "desc",
+      },
+      {
+        id: "desc",
+      },
+    ],
+    take: 100,
+  });
 
   const stoklar = await prisma.stok.findMany({
     where: {
@@ -117,6 +219,12 @@ export default async function StokPage() {
           </div>
 
         </div>
+
+        {query.error && (
+          <div className="mb-6 rounded-xl border border-red-800 bg-red-950/30 p-4 text-sm font-semibold text-red-300">
+            {query.error}
+          </div>
+        )}
 
         {/* ÖZET */}
 
@@ -376,6 +484,13 @@ export default async function StokPage() {
                             </a>
 
                             <a
+                              href={`/beach/yonetim/stok/${stok.id}`}
+                              className="rounded-lg border border-amber-700 px-3 py-2 text-sm font-bold text-amber-400 transition hover:bg-amber-950/30"
+                            >
+                              Düzenle
+                            </a>
+
+                            <a
                               href={`/beach/stok/${stok.id}/hareket?tip=GIRIS`}
                               className="rounded-lg border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-400 transition hover:bg-emerald-950/30"
                             >
@@ -388,6 +503,20 @@ export default async function StokPage() {
                             >
                               − Çıkış
                             </a>
+
+                            <form action={stokSil}>
+                              <input
+                                type="hidden"
+                                name="stokId"
+                                value={stok.id}
+                              />
+                              <button
+                                type="submit"
+                                className="rounded-lg bg-red-600 px-3 py-2 text-sm font-black text-white transition hover:bg-red-500"
+                              >
+                                Sil
+                              </button>
+                            </form>
 
                           </div>
 
@@ -403,6 +532,105 @@ export default async function StokPage() {
             </div>
           )}
 
+        </div>
+
+        {/* STOK HAREKETLERİ */}
+
+        <div className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+          <div className="border-b border-slate-800 p-6">
+            <h2 className="text-xl font-black">
+              Stok Giriş / Çıkış Hareketleri
+            </h2>
+
+            <p className="mt-1 text-sm text-slate-400">
+              Son 100 stok hareketi — fatura ve manuel giriş / çıkışlar birlikte gösterilir.
+            </p>
+          </div>
+
+          {hareketler.length === 0 ? (
+            <div className="p-12 text-center text-slate-400">
+              Henüz stok giriş / çıkış hareketi bulunmuyor.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1050px]">
+                <thead>
+                  <tr className="border-b border-slate-800 text-left text-sm text-slate-400">
+                    <th className="px-5 py-4">Tarih</th>
+                    <th className="px-5 py-4">Kod</th>
+                    <th className="px-5 py-4">Ürün</th>
+                    <th className="px-5 py-4">Hareket</th>
+                    <th className="px-5 py-4 text-right">Giriş</th>
+                    <th className="px-5 py-4 text-right">Çıkış</th>
+                    <th className="px-5 py-4">Belge No</th>
+                    <th className="px-5 py-4">Açıklama</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {hareketler.map((hareket) => {
+                    const giris = Number(hareket.giris);
+                    const cikis = Number(hareket.cikis);
+
+                    return (
+                      <tr
+                        key={hareket.id}
+                        className="border-b border-slate-800/70 transition hover:bg-slate-800/30"
+                      >
+                        <td className="whitespace-nowrap px-5 py-4 text-slate-300">
+                          {new Intl.DateTimeFormat("tr-TR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                          }).format(hareket.tarih)}
+                        </td>
+
+                        <td className="px-5 py-4 text-slate-400">
+                          {hareket.stok.kod}
+                        </td>
+
+                        <td className="px-5 py-4 font-bold">
+                          {hareket.stok.ad}
+                        </td>
+
+                        <td className="px-5 py-4">
+                          {giris > 0 ? (
+                            <span className="rounded-full bg-emerald-950/50 px-3 py-1 text-xs font-black text-emerald-400">
+                              GİRİŞ
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-red-950/50 px-3 py-1 text-xs font-black text-red-400">
+                              ÇIKIŞ
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4 text-right font-black text-emerald-400">
+                          {giris > 0
+                            ? `+${number(giris)} ${hareket.stok.birim}`
+                            : "-"}
+                        </td>
+
+                        <td className="whitespace-nowrap px-5 py-4 text-right font-black text-red-400">
+                          {cikis > 0
+                            ? `-${number(cikis)} ${hareket.stok.birim}`
+                            : "-"}
+                        </td>
+
+                        <td className="px-5 py-4 text-slate-300">
+                          {hareket.belgeNo || "-"}
+                        </td>
+
+                        <td className="max-w-[320px] px-5 py-4 text-slate-400">
+                          {hareket.aciklama || "-"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
       </div>

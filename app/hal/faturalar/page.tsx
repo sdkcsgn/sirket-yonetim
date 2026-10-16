@@ -3691,6 +3691,13 @@ cariId: fatura.cariId ?? undefined,
 
 
 
+                            <a
+                              href={`/hal/faturalar/${fatura.id}/duzenle`}
+                              className="rounded-lg border border-amber-600 px-3 py-2 text-xs font-black text-amber-400 hover:bg-amber-950/30"
+                            >
+                              Düzenle
+                            </a>
+
                             <form
 
 

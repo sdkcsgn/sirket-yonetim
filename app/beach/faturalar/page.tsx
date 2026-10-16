@@ -6,10 +6,6 @@ import { revalidatePath } from "next/cache";
 
 
 
-import { redirect } from "next/navigation";
-
-
-
 
 
 
@@ -26,14 +22,6 @@ type Props = {
 
 
 
-    tur?: string;
-
-
-
-    error?: string;
-
-
-
   }>;
 
 
@@ -46,263 +34,19 @@ type Props = {
 
 
 
-type UiTip = "SATIS" | "ALIS";
+function money(
 
 
 
-type UiTur = "URUN" | "HIZMET";
+  value: number,
 
 
 
-
-
-
-
-type OdemeSekli =
-
-
-
-  | "ACIK_HESAP"
-
-
-
-  | "NAKIT"
-
-
-
-  | "EFT_HAVALE"
-
-
-
-  | "KREDI_KARTI";
-
-
-
-
-
-
-
-function parseNumber(
-
-
-
-  formData: FormData,
-
-
-
-  name: string
+  currency: string
 
 
 
 ) {
-
-
-
-  const raw = String(
-
-
-
-    formData.get(name) ?? ""
-
-
-
-  )
-
-
-
-    .trim()
-
-
-
-    .replace(/\s/g, "");
-
-
-
-
-
-
-
-  if (!raw) {
-
-
-
-    return 0;
-
-
-
-  }
-
-
-
-
-
-
-
-  let normalized = raw;
-
-
-
-
-
-
-
-  if (
-
-
-
-    raw.includes(".") &&
-
-
-
-    raw.includes(",")
-
-
-
-  ) {
-
-
-
-    normalized = raw
-
-
-
-      .replace(/\./g, "")
-
-
-
-      .replace(",", ".");
-
-
-
-  } else if (raw.includes(",")) {
-
-
-
-    normalized = raw.replace(",", ".");
-
-
-
-  }
-
-
-
-
-
-
-
-  const value = Number(normalized);
-
-
-
-
-
-
-
-  return Number.isFinite(value)
-
-
-
-    ? value
-
-
-
-    : 0;
-
-
-
-}
-
-
-
-
-
-
-
-function parseDate(
-
-
-
-  formData: FormData,
-
-
-
-  name: string
-
-
-
-) {
-
-
-
-  const raw = String(
-
-
-
-    formData.get(name) ?? ""
-
-
-
-  ).trim();
-
-
-
-
-
-
-
-  if (!raw) {
-
-
-
-    return null;
-
-
-
-  }
-
-
-
-
-
-
-
-  const value = new Date(
-
-
-
-    `${raw}T12:00:00`
-
-
-
-  );
-
-
-
-
-
-
-
-  return Number.isNaN(value.getTime())
-
-
-
-    ? null
-
-
-
-    : value;
-
-
-
-}
-
-
-
-
-
-
-
-function money(value: number) {
 
 
 
@@ -314,7 +58,7 @@ function money(value: number) {
 
 
 
-    currency: "TRY",
+    currency,
 
 
 
@@ -338,7 +82,182 @@ function money(value: number) {
 
 
 
-export default async function YeniFaturaPage({
+function date(value: Date) {
+
+
+
+  return new Intl.DateTimeFormat("tr-TR", {
+
+
+
+    day: "2-digit",
+
+
+
+    month: "2-digit",
+
+
+
+    year: "numeric",
+
+
+
+  }).format(value);
+
+
+
+}
+
+
+
+
+
+
+
+function tipAdi(tip: string) {
+
+
+
+  switch (tip) {
+
+
+
+    case "SATIS":
+
+
+
+      return "Satış";
+
+
+
+
+
+
+
+    case "ALIS":
+
+
+
+      return "Alış";
+
+    case "VERILEN_HIZMET":
+      return "Verilen Hizmet";
+
+
+
+
+
+
+
+    case "ALINAN_HIZMET":
+
+
+
+      return "Alınan Hizmet";
+
+
+
+
+
+
+
+    default:
+
+
+
+      return tip;
+
+
+
+  }
+
+
+
+}
+
+
+
+
+
+
+
+function odemeAdi(odemeSekli: string) {
+
+
+
+  switch (odemeSekli) {
+
+
+
+    case "ACIK_HESAP":
+
+
+
+      return "Açık Hesap";
+
+
+
+
+
+
+
+    case "NAKIT":
+
+
+
+      return "Nakit";
+
+
+
+
+
+
+
+    case "EFT_HAVALE":
+
+
+
+      return "EFT / Havale";
+
+
+
+
+
+
+
+    case "KREDI_KARTI":
+
+
+
+      return "Kredi Kartı";
+
+
+
+
+
+
+
+    default:
+
+
+
+      return odemeSekli;
+
+
+
+  }
+
+
+
+}
+
+
+
+
+
+
+
+export default async function FaturalarPage({
 
 
 
@@ -351,46 +270,6 @@ export default async function YeniFaturaPage({
 
 
   const query = await searchParams;
-
-
-
-
-
-
-
-  const uiTip: UiTip =
-
-
-
-    query.tip === "ALIS"
-
-
-
-      ? "ALIS"
-
-
-
-      : "SATIS";
-
-
-
-
-
-
-
-  const uiTur: UiTur =
-
-
-
-    query.tur === "HIZMET"
-
-
-
-      ? "HIZMET"
-
-
-
-      : "URUN";
 
 
 
@@ -438,11 +317,7 @@ export default async function YeniFaturaPage({
 
 
 
-        Beach & Mağaza şirketi
-
-
-
-        bulunamadı.
+        Beach & Mağaza bulunamadı.
 
 
 
@@ -462,271 +337,31 @@ export default async function YeniFaturaPage({
 
 
 
-  const [
+  /*
 
 
 
-    cariler,
+    ==================================================
 
 
 
-    hesaplar,
+    FATURA SİL
 
 
 
-    stoklar,
+    ==================================================
 
 
 
-  ] = await Promise.all([
+  */
 
 
 
-    prisma.cari.findMany({
 
 
 
-      where: {
 
-
-
-        sirketId: sirket.id,
-
-
-
-        aktif: true,
-
-
-
-      },
-
-
-
-
-
-
-
-      orderBy: {
-
-
-
-        unvan: "asc",
-
-
-
-      },
-
-
-
-
-
-
-
-      select: {
-
-
-
-        id: true,
-
-
-
-        unvan: true,
-
-
-
-        atlasKodu: true,
-
-
-
-      },
-
-
-
-    }),
-
-
-
-
-
-
-
-    prisma.finansHesap.findMany({
-
-
-
-      where: {
-
-
-
-        sirketId: sirket.id,
-
-
-
-        aktif: true,
-
-
-
-      },
-
-
-
-
-
-
-
-      orderBy: {
-
-
-
-        ad: "asc",
-
-
-
-      },
-
-
-
-
-
-
-
-      select: {
-
-
-
-        id: true,
-
-
-
-        ad: true,
-
-
-
-        tip: true,
-
-
-
-        paraBirimi: true,
-
-
-
-        bankaAdi: true,
-
-
-
-      },
-
-
-
-    }),
-
-
-
-
-
-
-
-    prisma.stok.findMany({
-
-
-
-      where: {
-
-
-
-        sirketId: sirket.id,
-
-
-
-        aktif: true,
-
-
-
-      },
-
-
-
-
-
-
-
-      orderBy: {
-
-
-
-        ad: "asc",
-
-
-
-      },
-
-
-
-
-
-
-
-      select: {
-
-
-
-        id: true,
-
-
-
-        kod: true,
-
-
-
-        ad: true,
-
-
-
-        birim: true,
-
-
-
-        mevcutMiktar: true,
-
-
-
-      },
-
-
-
-    }),
-
-
-
-  ]);
-
-
-
-
-
-
-
-  const bugun =
-
-
-
-    new Date()
-
-
-
-      .toISOString()
-
-
-
-      .slice(0, 10);
-
-
-
-
-
-
-
-  async function faturaKaydet(
+  async function faturaSil(
 
 
 
@@ -739,6 +374,62 @@ export default async function YeniFaturaPage({
 
 
     "use server";
+
+
+
+
+
+
+
+    const faturaId =
+
+
+
+      Number(
+
+
+
+        formData.get("faturaId")
+
+
+
+      );
+
+
+
+
+
+
+
+    if (
+
+
+
+      !Number.isInteger(faturaId) ||
+
+
+
+      faturaId <= 0
+
+
+
+    ) {
+
+
+
+      throw new Error(
+
+
+
+        "Geçersiz fatura."
+
+
+
+      );
+
+
+
+    }
 
 
 
@@ -798,213 +489,11 @@ export default async function YeniFaturaPage({
 
 
 
-    const uiTip =
+    const fatura =
 
 
 
-      String(
-
-
-
-        formData.get("uiTip") ?? ""
-
-
-
-      ) as UiTip;
-
-
-
-
-
-
-
-    const uiTur =
-
-
-
-      String(
-
-
-
-        formData.get("uiTur") ?? ""
-
-
-
-      ) as UiTur;
-
-
-
-
-
-
-
-    const geriDon = (
-       mesaj: string
-     ): never => {
-
-
-
-      redirect(
-
-
-
-        `/beach/faturalar/yeni?tip=${uiTip}&tur=${uiTur}&error=${encodeURIComponent(
-
-
-
-          mesaj
-
-
-
-        )}`
-
-
-
-      );
-
-
-
-    };
-
-
-
-
-
-
-
-    if (
-
-
-
-      uiTip !== "SATIS" &&
-
-
-
-      uiTip !== "ALIS"
-
-
-
-    ) {
-
-
-
-      return geriDon(
-
-
-
-        "Geçersiz işlem türü."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    if (
-
-
-
-      uiTur !== "URUN" &&
-
-
-
-      uiTur !== "HIZMET"
-
-
-
-    ) {
-
-
-
-      return geriDon(
-
-
-
-        "Geçersiz ürün/hizmet seçimi."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    const cariId =
-
-
-
-      Number(
-
-
-
-        formData.get("cariId")
-
-
-
-      );
-
-
-
-
-
-
-
-    if (
-
-
-
-      !Number.isInteger(cariId) ||
-
-
-
-      cariId <= 0
-
-
-
-    ) {
-
-
-
-      return geriDon(
-
-
-
-        "Cari seçiniz."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    const cari =
-
-
-
-      await prisma.cari.findFirst({
+      await prisma.fatura.findFirst({
 
 
 
@@ -1012,7 +501,7 @@ export default async function YeniFaturaPage({
 
 
 
-          id: cariId,
+          id: faturaId,
 
 
 
@@ -1020,7 +509,19 @@ export default async function YeniFaturaPage({
 
 
 
-          aktif: true,
+        },
+
+
+
+
+
+
+
+        include: {
+
+
+
+          cari: true,
 
 
 
@@ -1036,87 +537,15 @@ export default async function YeniFaturaPage({
 
 
 
-    if (!cari) {
+    if (!fatura) {
 
 
 
-      return geriDon(
+      throw new Error(
 
 
 
-        "Seçilen cari bulunamadı."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    const faturaNo =
-
-
-
-      String(
-
-
-
-        formData.get("faturaNo") ??
-
-
-
-          ""
-
-
-
-      ).trim() || null;
-
-
-
-
-
-
-
-    const tarih =
-
-
-
-      parseDate(
-
-
-
-        formData,
-
-
-
-        "tarih"
-
-
-
-      );
-
-
-
-
-
-
-
-    if (!tarih) {
-
-
-
-      return geriDon(
-
-
-
-        "Fatura tarihi zorunludur."
+        "Fatura bulunamadı."
 
 
 
@@ -1132,539 +561,203 @@ export default async function YeniFaturaPage({
 
 
 
-    const vadeTarihi =
+    /*
 
 
 
-      parseDate(
+      Fatura kalemlerini ayrıca çekiyoruz.
 
 
 
-        formData,
+    */
 
 
 
-        "vadeTarihi"
 
 
 
-      );
 
+    const kalemler =
 
 
 
+      await prisma.faturaKalemi.findMany({
 
 
 
-    const paraBirimi =
+        where: {
 
 
 
-      String(
+          faturaId:
 
 
 
-        formData.get(
+            fatura.id,
 
 
 
-          "paraBirimi"
+        },
 
 
 
-        ) ?? "TRY"
+      });
 
 
 
-      );
 
 
 
 
+    /*
 
 
 
-    if (
+      ==================================================
 
 
 
-      ![
+      EŞLEŞEN CARİ HAREKETLERİ
 
 
 
-        "TRY",
+      ==================================================
 
 
 
-        "USD",
+    */
 
 
 
-        "EUR",
 
 
 
-        "GBP",
 
+    const cariHareketIdleri:
 
 
-        "RUB",
 
+      number[] = [];
 
 
-      ].includes(paraBirimi)
 
 
 
-    ) {
 
 
+    const faturaReferansi =
 
-      return geriDon(
 
 
+      fatura.faturaNo ||
 
-        "Geçersiz para birimi."
 
 
+      `Fatura #${fatura.id}`;
 
-      );
 
 
 
-    }
 
 
 
+    /*
 
 
 
+      Ana fatura hareketi
 
-    const odemeSekli =
 
 
+    */
 
-      String(
 
 
 
-        formData.get(
 
 
 
-          "odemeSekli"
+    const anaIslemTuru =
 
+      fatura.tip === "SATIS"
 
+        ? kalemler.some(
 
-        ) ?? "ACIK_HESAP"
+            (kalem) =>
 
+              kalem.stokId !== null
 
+          )
 
-      ) as OdemeSekli;
+          ? "SATIS_URUN"
 
+          : "SATIS_HIZMET"
 
+        : fatura.tip === "VERILEN_HIZMET"
 
+        ? "SATIS_HIZMET"
 
+        : fatura.tip === "ALINAN_HIZMET"
 
+        ? "ALIS_HIZMET"
 
+        : "ALIS_URUN";
 
-    if (
 
 
+    const anaCariHareket =
 
-      ![
 
 
+      await prisma.cariHareket.findFirst({
 
-        "ACIK_HESAP",
 
 
+        where: {
 
-        "NAKIT",
 
 
+       cariId: fatura.cariId ?? undefined,
 
-        "EFT_HAVALE",
 
 
 
-        "KREDI_KARTI",
 
 
 
-      ].includes(odemeSekli)
+          tarih:
 
 
 
-    ) {
+            fatura.tarih,
 
 
 
-      return geriDon(
 
 
 
-        "Geçersiz ödeme şekli."
 
+          islemTuru:
 
 
-      );
 
+            anaIslemTuru,
 
 
-    }
 
 
 
 
 
+          aciklama: {
 
 
-    const miktar =
 
+            contains:
 
 
-      parseNumber(
 
-
-
-        formData,
-
-
-
-        "miktar"
-
-
-
-      );
-
-
-
-
-
-
-
-    const birimFiyat =
-
-
-
-      parseNumber(
-
-
-
-        formData,
-
-
-
-        "birimFiyat"
-
-
-
-      );
-
-
-
-
-
-
-
-    const kdvOrani =
-
-
-
-      parseNumber(
-
-
-
-        formData,
-
-
-
-        "kdvOrani"
-
-
-
-      );
-
-
-
-
-
-
-
-    if (miktar <= 0) {
-
-
-
-      return geriDon(
-
-
-
-        "Miktar sıfırdan büyük olmalıdır."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    if (birimFiyat < 0) {
-
-
-
-      return geriDon(
-
-
-
-        "Birim fiyat geçersiz."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    if (
-
-
-
-      kdvOrani < 0 ||
-
-
-
-      kdvOrani > 100
-
-
-
-    ) {
-
-
-
-      return geriDon(
-
-
-
-        "KDV oranı geçersiz."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    const araToplam =
-
-
-
-      miktar * birimFiyat;
-
-
-
-
-
-
-
-    const kdvToplam =
-
-
-
-      araToplam *
-
-
-
-      (kdvOrani / 100);
-
-
-
-
-
-
-
-    const genelToplam =
-
-
-
-      araToplam + kdvToplam;
-
-
-
-
-
-
-
-    if (genelToplam <= 0) {
-
-
-
-      return geriDon(
-
-
-
-        "Fatura toplamı sıfırdan büyük olmalıdır."
-
-
-
-      );
-
-
-
-    }
-
-
-
-
-
-
-
-    let stokId:
-
-
-
-      number | null = null;
-
-
-
-
-
-
-
-    let kalemAciklama = "";
-
-
-
-
-
-
-
-    let birim:
-
-
-
-      string | null = null;
-
-
-
-
-
-
-
-    if (uiTur === "URUN") {
-
-
-
-      stokId =
-
-
-
-        Number(
-
-
-
-          formData.get("stokId")
-
-
-
-        );
-
-
-
-
-
-
-
-      if (
-
-
-
-        !Number.isInteger(
-
-
-
-          stokId
-
-
-
-        ) ||
-
-
-
-        stokId <= 0
-
-
-
-      ) {
-
-
-
-        return geriDon(
-
-
-
-          "Ürün seçiniz."
-
-
-
-        );
-
-
-
-      }
-
-
-
-
-
-
-
-      const stok =
-
-
-
-        await prisma.stok.findFirst({
-
-
-
-          where: {
-
-
-
-            id: stokId,
-
-
-
-            sirketId:
-
-
-
-              sirket.id,
-
-
-
-            aktif: true,
+              faturaReferansi,
 
 
 
@@ -1672,175 +765,91 @@ export default async function YeniFaturaPage({
 
 
 
-        });
 
 
 
 
+          ...(fatura.faturaNo
 
 
 
-      if (!stok) {
+            ? {
 
 
 
-        return geriDon(
+                belgeNo:
 
 
 
-          "Ürün bulunamadı."
+                  fatura.faturaNo,
 
 
 
-        );
+              }
 
 
 
-      }
+            : {}),
 
 
 
+        },
 
 
 
 
-      if (
 
 
 
-        uiTip === "SATIS" &&
+        orderBy: {
 
 
 
-        Number(
+          id: "desc",
 
 
 
-          stok.mevcutMiktar
+        },
 
 
 
-        ) < miktar
 
 
 
-      ) {
 
+        select: {
 
 
-        return geriDon(
 
+          id: true,
 
 
-          `Yetersiz stok. Mevcut: ${Number(
 
+        },
 
 
-            stok.mevcutMiktar
 
+      });
 
 
-          ).toLocaleString(
 
 
 
-            "tr-TR"
 
 
+    if (anaCariHareket) {
 
-          )} ${stok.birim}`
 
 
+      cariHareketIdleri.push(
 
-        );
 
 
+        anaCariHareket.id
 
-      }
 
 
-
-
-
-
-
-      kalemAciklama =
-
-
-
-        stok.ad;
-
-
-
-
-
-
-
-      birim =
-
-
-
-        stok.birim;
-
-
-
-    } else {
-
-
-
-      kalemAciklama =
-
-
-
-        String(
-
-
-
-          formData.get(
-
-
-
-            "hizmetAciklama"
-
-
-
-          ) ?? ""
-
-
-
-        ).trim();
-
-
-
-
-
-
-
-      if (!kalemAciklama) {
-
-
-
-        return geriDon(
-
-
-
-          "Hizmet açıklaması giriniz."
-
-
-
-        );
-
-
-
-      }
-
-
-
-
-
-
-
-      birim = "Hizmet";
+      );
 
 
 
@@ -1852,11 +861,15 @@ export default async function YeniFaturaPage({
 
 
 
-    let finansHesapId:
+    /*
 
 
 
-      number | null = null;
+      Peşin ödeme/tahsilat cari hareketi
+
+
+
+    */
 
 
 
@@ -1868,7 +881,7 @@ export default async function YeniFaturaPage({
 
 
 
-      odemeSekli !==
+      fatura.odemeSekli !==
 
 
 
@@ -1880,107 +893,140 @@ export default async function YeniFaturaPage({
 
 
 
-      finansHesapId =
+      const satisTarafi =
+
+        fatura.tip === "SATIS" ||
+
+        fatura.tip === "VERILEN_HIZMET";
 
 
 
-        Number(
+      const odemeCariIslemTuru =
+
+        satisTarafi
+
+          ? "FATURA_TAHSILAT"
+
+          : "FATURA_ODEME";
 
 
 
-          formData.get(
+      const odemeCariHareket =
 
 
 
-            "finansHesapId"
-
-
-
-          )
-
-
-
-        );
-
-
-
-
-
-
-
-      if (
-
-
-
-        !Number.isInteger(
-
-
-
-          finansHesapId
-
-
-
-        ) ||
-
-
-
-        finansHesapId <= 0
-
-
-
-      ) {
-
-
-
-        return geriDon(
-
-
-
-          "Ödeme hesabı seçiniz."
-
-
-
-        );
-
-
-
-      }
-
-
-
-
-
-
-
-      const finansHesap =
-
-
-
-        await prisma.finansHesap.findFirst({
+        await prisma.cariHareket.findFirst({
 
 
 
           where: {
 
 
-
-            id:
-
-
-
-              finansHesapId,
+cariId: fatura.cariId ?? undefined,
 
 
 
-            sirketId:
 
 
 
-              sirket.id,
+
+            tarih:
 
 
 
-            aktif: true,
+              fatura.tarih,
+
+
+
+
+
+
+
+            islemTuru:
+
+
+
+              odemeCariIslemTuru,
+
+
+
+
+
+
+
+            aciklama: {
+
+
+
+              contains:
+
+
+
+                faturaReferansi,
+
+
+
+            },
+
+
+
+
+
+
+
+            ...(fatura.faturaNo
+
+
+
+              ? {
+
+
+
+                  belgeNo:
+
+
+
+                    fatura.faturaNo,
+
+
+
+                }
+
+
+
+              : {}),
+
+
+
+          },
+
+
+
+
+
+
+
+          orderBy: {
+
+
+
+            id: "desc",
+
+
+
+          },
+
+
+
+
+
+
+
+          select: {
+
+
+
+            id: true,
 
 
 
@@ -1996,119 +1042,15 @@ export default async function YeniFaturaPage({
 
 
 
-      if (!finansHesap) {
+      if (odemeCariHareket) {
 
 
 
-        return geriDon(
+        cariHareketIdleri.push(
 
 
 
-          "Finans hesabı bulunamadı."
-
-
-
-        );
-
-
-
-      }
-
-
-
-
-
-
-
-      const beklenenTip =
-
-
-
-        odemeSekli === "NAKIT"
-
-
-
-          ? "KASA"
-
-
-
-          : odemeSekli ===
-
-
-
-            "EFT_HAVALE"
-
-
-
-          ? "BANKA"
-
-
-
-          : "KREDI_KARTI";
-
-
-
-
-
-
-
-      if (
-
-
-
-        finansHesap.tip !==
-
-
-
-        beklenenTip
-
-
-
-      ) {
-
-
-
-        return geriDon(
-
-
-
-          "Seçilen hesap ödeme şekliyle uyumlu değil."
-
-
-
-        );
-
-
-
-      }
-
-
-
-
-
-
-
-      if (
-
-
-
-        finansHesap.paraBirimi !==
-
-
-
-        paraBirimi
-
-
-
-      ) {
-
-
-
-        return geriDon(
-
-
-
-          `Fatura ${paraBirimi}, seçilen hesap ${finansHesap.paraBirimi}. Aynı para birimindeki hesabı seçiniz.`
+          odemeCariHareket.id
 
 
 
@@ -2128,27 +1070,23 @@ export default async function YeniFaturaPage({
 
 
 
-    const aciklama =
+    /*
 
 
 
-      String(
+      ==================================================
 
 
 
-        formData.get(
+      EŞLEŞEN FİNANS HAREKETİ
 
 
 
-          "aciklama"
+      ==================================================
 
 
 
-        ) ?? ""
-
-
-
-      ).trim() || null;
+    */
 
 
 
@@ -2156,21 +1094,519 @@ export default async function YeniFaturaPage({
 
 
 
-    const faturaTipi =
+    let finansHareketId:
 
-      uiTip === "SATIS" && uiTur === "URUN"
 
-        ? "SATIS"
 
-        : uiTip === "SATIS" && uiTur === "HIZMET"
+      number | null = null;
 
-        ? "VERILEN_HIZMET"
 
-        : uiTip === "ALIS" && uiTur === "HIZMET"
 
-        ? "ALINAN_HIZMET"
 
-        : "ALIS";
+
+
+
+    if (
+
+
+
+      fatura.odemeSekli !==
+
+
+
+        "ACIK_HESAP" &&
+
+
+
+      fatura.finansHesapId
+
+
+
+    ) {
+
+
+
+      const satisTarafi =
+
+        fatura.tip === "SATIS" ||
+
+        fatura.tip === "VERILEN_HIZMET";
+
+
+
+      const finansTip =
+
+        satisTarafi
+
+          ? "GIRIS"
+
+          : "CIKIS";
+
+
+
+      const finansAciklama =
+
+        satisTarafi
+
+          ? "[Satış Tahsilatı]"
+
+          : fatura.tip === "ALINAN_HIZMET"
+
+          ? "[Hizmet Ödemesi]"
+
+          : "[Alış Ödemesi]";
+
+
+
+      const finansHareket =
+
+
+
+        await prisma.finansHareket.findFirst({
+
+
+
+          where: {
+
+
+
+            finansHesapId:
+
+
+
+              fatura.finansHesapId,
+
+
+
+
+
+
+
+            cariId:
+
+
+
+              fatura.cariId,
+
+
+
+
+
+
+
+            tarih:
+
+
+
+              fatura.tarih,
+
+
+
+
+
+
+
+            tip:
+
+
+
+              finansTip,
+
+
+
+
+
+
+
+            tutar:
+
+
+
+              fatura.genelToplam,
+
+
+
+
+
+
+
+            aciklama: {
+
+
+
+              startsWith:
+
+
+
+                finansAciklama,
+
+
+
+            },
+
+
+
+
+
+
+
+            ...(fatura.faturaNo
+
+
+
+              ? {
+
+
+
+                  belgeNo:
+
+
+
+                    fatura.faturaNo,
+
+
+
+                }
+
+
+
+              : {
+
+
+
+                  belgeNo: null,
+
+
+
+                }),
+
+
+
+          },
+
+
+
+
+
+
+
+          orderBy: {
+
+
+
+            id: "desc",
+
+
+
+          },
+
+
+
+
+
+
+
+          select: {
+
+
+
+            id: true,
+
+
+
+          },
+
+
+
+        });
+
+
+
+
+
+
+
+      if (finansHareket) {
+
+
+
+        finansHareketId =
+
+
+
+          finansHareket.id;
+
+
+
+      }
+
+
+
+    }
+
+
+
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      STOK HAREKETLERİNİ BUL
+
+
+
+      ==================================================
+
+
+
+    */
+
+
+
+
+
+
+
+    const stokHareketIdleri:
+
+
+
+      number[] = [];
+
+
+
+
+
+
+
+    for (const kalem of kalemler) {
+
+
+
+      if (!kalem.stokId) {
+
+
+
+        continue;
+
+
+
+      }
+
+
+
+
+
+
+
+      const stokHareket =
+
+
+
+        await prisma.stokHareket.findFirst({
+
+
+
+          where: {
+
+
+
+            stokId:
+
+
+
+              kalem.stokId,
+
+
+
+
+
+
+
+            tarih:
+
+
+
+              fatura.tarih,
+
+
+
+
+
+
+
+            ...(fatura.faturaNo
+
+
+
+              ? {
+
+
+
+                  belgeNo:
+
+
+
+                    fatura.faturaNo,
+
+
+
+                }
+
+
+
+              : {
+
+
+
+                  belgeNo: null,
+
+
+
+                }),
+
+
+
+
+
+
+
+            ...(fatura.tip ===
+
+
+
+            "SATIS"
+
+
+
+              ? {
+
+
+
+                  cikis:
+
+
+
+                    kalem.miktar,
+
+
+
+                }
+
+
+
+              : {
+
+
+
+                  giris:
+
+
+
+                    kalem.miktar,
+
+
+
+                }),
+
+
+
+          },
+
+
+
+
+
+
+
+          orderBy: {
+
+
+
+            id: "desc",
+
+
+
+          },
+
+
+
+
+
+
+
+          select: {
+
+
+
+            id: true,
+
+
+
+          },
+
+
+
+        });
+
+
+
+
+
+
+
+      if (stokHareket) {
+
+
+
+        stokHareketIdleri.push(
+
+
+
+          stokHareket.id
+
+
+
+        );
+
+
+
+      }
+
+
+
+    }
+
+
+
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      TÜM SİLME / GERİ ALMA İŞLEMİ
+
+
+
+      ==================================================
+
+
+
+    */
 
 
 
@@ -2186,291 +1622,43 @@ export default async function YeniFaturaPage({
 
 
 
-        const fatura =
-
-
-
-          await tx.fatura.create({
-
-
-
-            data: {
-
-
-
-              sirketId:
-
-
-
-                sirket.id,
-
-
-
-
-
-
-
-              cariId:
-
-
-
-                cari.id,
-
-
-
-
-
-
-
-              finansHesapId,
-
-
-
-
-
-
-
-              tip:
-
-
-
-                faturaTipi,
-
-
-
-
-
-
-
-              odemeSekli,
-
-
-
-
-
-
-
-              paraBirimi:
-
-
-
-                paraBirimi as
-
-
-
-                  | "TRY"
-
-
-
-                  | "USD"
-
-
-
-                  | "EUR"
-
-
-
-                  | "GBP"
-
-
-
-                  | "RUB",
-
-
-
-
-
-
-
-              faturaNo,
-
-
-
-
-
-
-
-              tarih,
-
-
-
-
-
-
-
-              vadeTarihi,
-
-
-
-
-
-
-
-              aciklama,
-
-
-
-
-
-
-
-              araToplam,
-
-
-
-
-
-
-
-              kdvToplam,
-
-
-
-
-
-
-
-              genelToplam,
-
-
-
-
-
-
-
-              odendi:
-
-
-
-                odemeSekli !==
-
-
-
-                "ACIK_HESAP",
-
-
-
-            },
-
-
-
-          });
-
-
-
-
-
-
-
-        await tx.faturaKalemi.create({
-
-
-
-          data: {
-
-
-
-            faturaId:
-
-
-
-              fatura.id,
-
-
-
-
-
-
-
-            stokId:
-
-
-
-              uiTur === "URUN"
-
-
-
-                ? stokId
-
-
-
-                : null,
-
-
-
-
-
-
-
-            aciklama:
-
-
-
-              kalemAciklama,
-
-
-
-
-
-
-
-            miktar,
-
-
-
-
-
-
-
-            birim,
-
-
-
-
-
-
-
-            birimFiyat,
-
-
-
-
-
-
-
-            kdvOrani,
-
-
-
-
-
-
-
-            toplam:
-
-
-
-              genelToplam,
-
-
-
-          },
-
-
-
-        });
-
-
-
-
-
-
-
         /*
 
 
 
-          STOK
+          1) STOK MİKTARINI GERİ AL
+
+
+
+
+
+
+
+          SATIŞ siliniyorsa:
+
+
+
+          Daha önce stok azalmıştı.
+
+
+
+          Şimdi geri artır.
+
+
+
+
+
+
+
+          ALIŞ siliniyorsa:
+
+
+
+          Daha önce stok artmıştı.
+
+
+
+          Şimdi geri azalt.
 
 
 
@@ -2482,19 +1670,23 @@ export default async function YeniFaturaPage({
 
 
 
-        if (
+        for (const kalem of kalemler) {
 
 
 
-          uiTur === "URUN" &&
+          if (!kalem.stokId) {
 
 
 
-          stokId
+            continue;
 
 
 
-        ) {
+          }
+
+
+
+
 
 
 
@@ -2502,7 +1694,7 @@ export default async function YeniFaturaPage({
 
 
 
-            uiTip === "SATIS"
+            fatura.tip === "SATIS"
 
 
 
@@ -2518,151 +1710,11 @@ export default async function YeniFaturaPage({
 
 
 
-                id: stokId,
+                id:
 
 
 
-              },
-
-
-
-
-
-
-
-              data: {
-
-
-
-                mevcutMiktar: {
-
-
-
-                  decrement:
-
-
-
-                    miktar,
-
-
-
-                },
-
-
-
-              },
-
-
-
-            });
-
-
-
-
-
-
-
-            await tx.stokHareket.create({
-
-
-
-              data: {
-
-
-
-                stokId,
-
-
-
-
-
-
-
-                tarih,
-
-
-
-
-
-
-
-                giris: 0,
-
-
-
-
-
-
-
-                cikis:
-
-
-
-                  miktar,
-
-
-
-
-
-
-
-                belgeNo:
-
-
-
-                  faturaNo,
-
-
-
-
-
-
-
-                aciklama:
-
-
-
-                  `Satış faturası${
-
-
-
-                    faturaNo
-
-
-
-                      ? ` - ${faturaNo}`
-
-
-
-                      : ""
-
-
-
-                  }`,
-
-
-
-              },
-
-
-
-            });
-
-
-
-          } else {
-
-
-
-            await tx.stok.update({
-
-
-
-              where: {
-
-
-
-                id: stokId,
+                  kalem.stokId,
 
 
 
@@ -2686,7 +1738,7 @@ export default async function YeniFaturaPage({
 
 
 
-                    miktar,
+                    kalem.miktar,
 
 
 
@@ -2702,451 +1754,11 @@ export default async function YeniFaturaPage({
 
 
 
+          } else if (
 
 
 
-
-            await tx.stokHareket.create({
-
-
-
-              data: {
-
-
-
-                stokId,
-
-
-
-
-
-
-
-                tarih,
-
-
-
-
-
-
-
-                giris:
-
-
-
-                  miktar,
-
-
-
-
-
-
-
-                cikis: 0,
-
-
-
-
-
-
-
-                belgeNo:
-
-
-
-                  faturaNo,
-
-
-
-
-
-
-
-                aciklama:
-
-
-
-                  `Alış faturası${
-
-
-
-                    faturaNo
-
-
-
-                      ? ` - ${faturaNo}`
-
-
-
-                      : ""
-
-
-
-                  }`,
-
-
-
-              },
-
-
-
-            });
-
-
-
-          }
-
-
-
-        }
-
-
-
-
-
-
-
-        /*
-
-
-
-          CARİ FATURA HAREKETİ
-
-
-
-        */
-
-
-
-
-
-
-
-        if (
-
-
-
-          uiTip === "SATIS"
-
-
-
-        ) {
-
-
-
-          await tx.cariHareket.create({
-
-
-
-            data: {
-
-
-
-              cariId:
-
-
-
-                cari.id,
-
-
-
-
-
-
-
-              tarih,
-
-
-
-
-
-
-
-              tip: "BORC",
-
-
-
-
-
-
-
-              islemTuru:
-
-
-
-                uiTur ===
-
-
-
-                "URUN"
-
-
-
-                  ? "SATIS_URUN"
-
-
-
-                  : "SATIS_HIZMET",
-
-
-
-
-
-
-
-              aciklama:
-
-
-
-                `[Satış] ${
-
-
-
-                  faturaNo ||
-
-
-
-                  `Fatura #${fatura.id}`
-
-
-
-                }`,
-
-
-
-
-
-
-
-              belgeNo:
-
-
-
-                faturaNo,
-
-
-
-
-
-
-
-              borc:
-
-
-
-                genelToplam,
-
-
-
-
-
-
-
-              alacak: 0,
-
-
-
-            },
-
-
-
-          });
-
-
-
-        } else {
-
-
-
-          await tx.cariHareket.create({
-
-
-
-            data: {
-
-
-
-              cariId:
-
-
-
-                cari.id,
-
-
-
-
-
-
-
-              tarih,
-
-
-
-
-
-
-
-              tip: "ALACAK",
-
-
-
-
-
-
-
-              islemTuru:
-
-
-
-                uiTur ===
-
-
-
-                "URUN"
-
-
-
-                  ? "ALIS_URUN"
-
-
-
-                  : "ALIS_HIZMET",
-
-
-
-
-
-
-
-              aciklama:
-
-
-
-                `[${
-
-
-
-                  uiTur ===
-
-
-
-                  "URUN"
-
-
-
-                    ? "Alış"
-
-
-
-                    : "Alınan Hizmet"
-
-
-
-                }] ${
-
-
-
-                  faturaNo ||
-
-
-
-                  `Fatura #${fatura.id}`
-
-
-
-                }`,
-
-
-
-
-
-
-
-              belgeNo:
-
-
-
-                faturaNo,
-
-
-
-
-
-
-
-              borc: 0,
-
-
-
-
-
-
-
-              alacak:
-
-
-
-                genelToplam,
-
-
-
-            },
-
-
-
-          });
-
-
-
-        }
-
-
-
-
-
-
-
-        /*
-
-
-
-          ÖDEME / TAHSİLAT
-
-
-
-        */
-
-
-
-
-
-
-
-        if (
-
-
-
-          odemeSekli !==
-
-
-
-            "ACIK_HESAP" &&
-
-
-
-          finansHesapId
-
-
-
-        ) {
-
-
-
-          if (
-
-
-
-            uiTip === "SATIS"
+            fatura.tip === "ALIS"
 
 
 
@@ -3154,127 +1766,19 @@ export default async function YeniFaturaPage({
 
 
 
-            /*
+            await tx.stok.update({
 
 
 
-              Müşteriden tahsilat:
+              where: {
 
 
 
-              Cari alacak hareketi
+                id:
 
 
 
-              + finans hesabına giriş
-
-
-
-            */
-
-
-
-
-
-
-
-            await tx.cariHareket.create({
-
-
-
-              data: {
-
-
-
-                cariId:
-
-
-
-                  cari.id,
-
-
-
-
-
-
-
-                tarih,
-
-
-
-
-
-
-
-                tip: "ALACAK",
-
-
-
-
-
-
-
-                islemTuru:
-
-
-
-                  "FATURA_TAHSILAT",
-
-
-
-
-
-
-
-                aciklama:
-
-
-
-                  `[Tahsilat] ${
-
-
-
-                    faturaNo ||
-
-
-
-                    `Fatura #${fatura.id}`
-
-
-
-                  }`,
-
-
-
-
-
-
-
-                belgeNo:
-
-
-
-                  faturaNo,
-
-
-
-
-
-
-
-                borc: 0,
-
-
-
-
-
-
-
-                alacak:
-
-
-
-                  genelToplam,
+                  kalem.stokId,
 
 
 
@@ -3282,15 +1786,7 @@ export default async function YeniFaturaPage({
 
 
 
-            });
 
-
-
-
-
-
-
-            await tx.finansHareket.create({
 
 
 
@@ -3298,315 +1794,19 @@ export default async function YeniFaturaPage({
 
 
 
-                finansHesapId,
+                mevcutMiktar: {
 
 
 
+                  decrement:
 
 
 
+                    kalem.miktar,
 
-                cariId:
 
 
-
-                  cari.id,
-
-
-
-
-
-
-
-                tarih,
-
-
-
-
-
-
-
-                tip: "GIRIS",
-
-
-
-
-
-
-
-                tutar:
-
-
-
-                  genelToplam,
-
-
-
-
-
-
-
-                aciklama:
-
-
-
-                  `[Satış Tahsilatı] ${cari.unvan}`,
-
-
-
-
-
-
-
-                belgeNo:
-
-
-
-                  faturaNo,
-
-
-
-              },
-
-
-
-            });
-
-
-
-          } else {
-
-
-
-            /*
-
-
-
-              Tedarikçiye ödeme:
-
-
-
-              Cari borç hareketi
-
-
-
-              + finans hesabından çıkış
-
-
-
-            */
-
-
-
-
-
-
-
-            await tx.cariHareket.create({
-
-
-
-              data: {
-
-
-
-                cariId:
-
-
-
-                  cari.id,
-
-
-
-
-
-
-
-                tarih,
-
-
-
-
-
-
-
-                tip: "BORC",
-
-
-
-
-
-
-
-                islemTuru:
-
-
-
-                  "FATURA_ODEME",
-
-
-
-
-
-
-
-                aciklama:
-
-
-
-                  `[Ödeme] ${
-
-
-
-                    faturaNo ||
-
-
-
-                    `Fatura #${fatura.id}`
-
-
-
-                  }`,
-
-
-
-
-
-
-
-                belgeNo:
-
-
-
-                  faturaNo,
-
-
-
-
-
-
-
-                borc:
-
-
-
-                  genelToplam,
-
-
-
-
-
-
-
-                alacak: 0,
-
-
-
-              },
-
-
-
-            });
-
-
-
-
-
-
-
-            await tx.finansHareket.create({
-
-
-
-              data: {
-
-
-
-                finansHesapId,
-
-
-
-
-
-
-
-                cariId:
-
-
-
-                  cari.id,
-
-
-
-
-
-
-
-                tarih,
-
-
-
-
-
-
-
-                tip: "CIKIS",
-
-
-
-
-
-
-
-                tutar:
-
-
-
-                  genelToplam,
-
-
-
-
-
-
-
-                aciklama:
-
-
-
-                  `[${
-
-
-
-                    uiTur ===
-
-
-
-                    "URUN"
-
-
-
-                      ? "Alış Ödemesi"
-
-
-
-                      : "Hizmet Ödemesi"
-
-
-
-                  }] ${cari.unvan}`,
-
-
-
-
-
-
-
-                belgeNo:
-
-
-
-                  faturaNo,
+                },
 
 
 
@@ -3623,6 +1823,294 @@ export default async function YeniFaturaPage({
 
 
         }
+
+
+
+
+
+
+
+        /*
+
+
+
+          2) STOK HAREKETLERİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        if (
+
+
+
+          stokHareketIdleri.length >
+
+
+
+          0
+
+
+
+        ) {
+
+
+
+          await tx.stokHareket.deleteMany({
+
+
+
+            where: {
+
+
+
+              id: {
+
+
+
+                in:
+
+
+
+                  stokHareketIdleri,
+
+
+
+              },
+
+
+
+            },
+
+
+
+          });
+
+
+
+        }
+
+
+
+
+
+
+
+        /*
+
+
+
+          3) CARİ HAREKETLERİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        if (
+
+
+
+          cariHareketIdleri.length >
+
+
+
+          0
+
+
+
+        ) {
+
+
+
+          await tx.cariHareket.deleteMany({
+
+
+
+            where: {
+
+
+
+              id: {
+
+
+
+                in:
+
+
+
+                  cariHareketIdleri,
+
+
+
+              },
+
+
+
+            },
+
+
+
+          });
+
+
+
+        }
+
+
+
+
+
+
+
+        /*
+
+
+
+          4) KASA / BANKA / KREDİ KARTI
+
+
+
+             HAREKETİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        if (finansHareketId) {
+
+
+
+          await tx.finansHareket.delete({
+
+
+
+            where: {
+
+
+
+              id:
+
+
+
+                finansHareketId,
+
+
+
+            },
+
+
+
+          });
+
+
+
+        }
+
+
+
+
+
+
+
+        /*
+
+
+
+          5) FATURA KALEMLERİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        await tx.faturaKalemi.deleteMany({
+
+
+
+          where: {
+
+
+
+            faturaId:
+
+
+
+              fatura.id,
+
+
+
+          },
+
+
+
+        });
+
+
+
+
+
+
+
+        /*
+
+
+
+          6) FATURAYI SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        await tx.fatura.delete({
+
+
+
+          where: {
+
+
+
+            id:
+
+
+
+              fatura.id,
+
+
+
+          },
+
+
+
+        });
 
 
 
@@ -3631,6 +2119,30 @@ export default async function YeniFaturaPage({
 
 
     );
+
+
+
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      SAYFALARI YENİLE
+
+
+
+      ==================================================
+
+
+
+    */
 
 
 
@@ -3690,7 +2202,7 @@ export default async function YeniFaturaPage({
 
 
 
-      `/beach/cariler/${cari.id}`
+      `/beach/cariler/${fatura.cariId}`
 
 
 
@@ -3738,7 +2250,7 @@ export default async function YeniFaturaPage({
 
 
 
-      "/beach/yonetim/stok"
+      "/beach/stok"
 
 
 
@@ -3750,11 +2262,11 @@ export default async function YeniFaturaPage({
 
 
 
-    redirect(
+    revalidatePath(
 
 
 
-      "/beach/faturalar"
+      "/beach/yonetim/stok"
 
 
 
@@ -3770,49 +2282,189 @@ export default async function YeniFaturaPage({
 
 
 
-  const inputClass =
+  /*
 
 
 
-    "w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-cyan-500";
+    ==================================================
 
 
 
+    FATURALAR
 
 
 
-
-  const labelClass =
-
-
-
-    "mb-2 block text-sm font-bold text-slate-300";
+    ==================================================
 
 
 
-
-
-
-
-  const baslik =
-
-    uiTip === "SATIS"
-
-      ? uiTur === "HIZMET"
-
-        ? "Verilen Hizmet Faturası"
-
-        : "Satış Faturası"
-
-      : uiTur === "HIZMET"
-
-      ? "Alınan Hizmet Faturası"
-
-      : "Alış Faturası";
+  */
 
 
 
 
+
+
+
+  const tumFaturalar =
+
+
+
+    await prisma.fatura.findMany({
+
+
+
+      where: {
+
+
+
+        sirketId: sirket.id,
+
+
+
+      },
+
+
+
+
+
+
+
+      include: {
+
+
+
+        cari: true,
+
+
+
+      },
+
+
+
+
+
+
+
+      orderBy: [
+
+
+
+        {
+
+
+
+          tarih: "desc",
+
+
+
+        },
+
+
+
+        {
+
+
+
+          id: "desc",
+
+
+
+        },
+
+
+
+      ],
+
+
+
+    });
+
+
+
+
+
+
+
+  /*
+
+
+
+    ==================================================
+
+
+
+    FİLTRE
+
+
+
+    ==================================================
+
+
+
+  */
+
+
+
+
+
+
+
+  const aktifFiltre =
+
+
+
+    query.tip || "TUMU";
+
+
+
+
+
+
+
+  const faturalar =
+
+    aktifFiltre === "SATIS"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "SATIS"
+
+        )
+
+      : aktifFiltre === "ALIS"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "ALIS"
+
+        )
+
+      : aktifFiltre === "VERILEN_HIZMET"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "VERILEN_HIZMET"
+
+        )
+
+      : aktifFiltre === "ALINAN_HIZMET"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "ALINAN_HIZMET"
+
+        )
+
+      : tumFaturalar;
 
 
 
@@ -3824,7 +2476,11 @@ export default async function YeniFaturaPage({
 
 
 
-      <div className="mx-auto max-w-4xl px-6 py-10">
+
+
+
+
+      <div className="mx-auto w-full max-w-[1550px] px-4 py-8 md:px-6">
 
 
 
@@ -3840,7 +2496,7 @@ export default async function YeniFaturaPage({
 
 
 
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
 
 
 
@@ -3849,6 +2505,10 @@ export default async function YeniFaturaPage({
 
 
           <div>
+
+
+
+
 
 
 
@@ -3868,11 +2528,11 @@ export default async function YeniFaturaPage({
 
 
 
-            <h1 className="mt-2 text-4xl font-black">
+            <h1 className="mt-2 text-3xl font-black md:text-4xl">
 
 
 
-              {baslik}
+              Faturalar
 
 
 
@@ -3884,15 +2544,11 @@ export default async function YeniFaturaPage({
 
 
 
-            <p className="mt-2 text-slate-400">
+            <p className="mt-2 text-sm text-slate-400">
 
 
 
-              Ürün veya hizmet işlemini
-
-
-
-              hızlıca kaydedin.
+              Alış, satış, verilen ve alınan hizmet faturaları
 
 
 
@@ -3900,1690 +2556,6 @@ export default async function YeniFaturaPage({
 
 
 
-          </div>
-
-
-
-
-
-
-
-          <a
-
-
-
-            href="/beach"
-
-
-
-            className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 transition hover:bg-slate-900"
-
-
-
-          >
-
-
-
-            ← Panele Dön
-
-
-
-          </a>
-
-
-
-
-
-
-
-        </div>
-
-
-
-
-
-
-
-        {/* SATIŞ / ALIŞ */}
-
-
-
-
-
-
-
-        <div className="mb-4 grid grid-cols-2 gap-3">
-
-
-
-
-
-
-
-          <a
-
-
-
-            href={`/beach/faturalar/yeni?tip=SATIS&tur=${uiTur}`}
-
-
-
-            className={`rounded-2xl border p-5 text-center transition ${
-
-
-
-              uiTip === "SATIS"
-
-
-
-                ? "border-emerald-500 bg-emerald-950/20"
-
-
-
-                : "border-slate-800 bg-slate-900"
-
-
-
-            }`}
-
-
-
-          >
-
-
-
-            <div className="text-3xl">
-
-
-
-              📈
-
-
-
-            </div>
-
-
-
-
-
-
-
-            <p className="mt-2 font-black">
-
-
-
-              Satış
-
-
-
-            </p>
-
-
-
-          </a>
-
-
-
-
-
-
-
-          <a
-
-
-
-            href={`/beach/faturalar/yeni?tip=ALIS&tur=${uiTur}`}
-
-
-
-            className={`rounded-2xl border p-5 text-center transition ${
-
-
-
-              uiTip === "ALIS"
-
-
-
-                ? "border-orange-500 bg-orange-950/20"
-
-
-
-                : "border-slate-800 bg-slate-900"
-
-
-
-            }`}
-
-
-
-          >
-
-
-
-            <div className="text-3xl">
-
-
-
-              📉
-
-
-
-            </div>
-
-
-
-
-
-
-
-            <p className="mt-2 font-black">
-
-
-
-              Alış
-
-
-
-            </p>
-
-
-
-          </a>
-
-
-
-
-
-
-
-        </div>
-
-
-
-
-
-
-
-        {/* ÜRÜN / HİZMET */}
-
-
-
-
-
-
-
-        <div className="mb-7 grid grid-cols-2 gap-3">
-
-
-
-
-
-
-
-          <a
-
-
-
-            href={`/beach/faturalar/yeni?tip=${uiTip}&tur=URUN`}
-
-
-
-            className={`rounded-xl border px-5 py-4 text-center font-black transition ${
-
-
-
-              uiTur === "URUN"
-
-
-
-                ? "border-cyan-500 bg-cyan-950/20 text-cyan-400"
-
-
-
-                : "border-slate-800 bg-slate-900 text-slate-400"
-
-
-
-            }`}
-
-
-
-          >
-
-
-
-            📦 Ürün
-
-
-
-          </a>
-
-
-
-
-
-
-
-          <a
-
-
-
-            href={`/beach/faturalar/yeni?tip=${uiTip}&tur=HIZMET`}
-
-
-
-            className={`rounded-xl border px-5 py-4 text-center font-black transition ${
-
-
-
-              uiTur === "HIZMET"
-
-
-
-                ? "border-violet-500 bg-violet-950/20 text-violet-400"
-
-
-
-                : "border-slate-800 bg-slate-900 text-slate-400"
-
-
-
-            }`}
-
-
-
-          >
-
-
-
-            🧾 Hizmet
-
-
-
-          </a>
-
-
-
-
-
-
-
-        </div>
-
-
-
-
-
-
-
-        {/* HATA */}
-
-
-
-
-
-
-
-        {query.error && (
-
-
-
-          <div className="mb-6 rounded-xl border border-red-800 bg-red-950/30 p-4 font-semibold text-red-300">
-
-
-
-            {query.error}
-
-
-
-          </div>
-
-
-
-        )}
-
-
-
-
-
-
-
-        {/* FORM */}
-
-
-
-
-
-
-
-        <form
-
-
-
-          action={faturaKaydet}
-
-
-
-          className="rounded-2xl border border-slate-800 bg-slate-900 p-6 md:p-8"
-
-
-
-        >
-
-
-
-
-
-
-
-          <input
-
-
-
-            type="hidden"
-
-
-
-            name="uiTip"
-
-
-
-            value={uiTip}
-
-
-
-          />
-
-
-
-
-
-
-
-          <input
-
-
-
-            type="hidden"
-
-
-
-            name="uiTur"
-
-
-
-            value={uiTur}
-
-
-
-          />
-
-
-
-
-
-
-
-          <div className="grid gap-5 md:grid-cols-2">
-
-
-
-
-
-
-
-            {/* CARİ */}
-
-
-
-
-
-
-
-            <div className="md:col-span-2">
-
-
-
-              <label className={labelClass}>
-
-
-
-                Cari *
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <select
-
-
-
-                name="cariId"
-
-
-
-                required
-
-
-
-                defaultValue=""
-
-
-
-                className={inputClass}
-
-
-
-              >
-
-
-
-                <option value="">
-
-
-
-                  Cari seçiniz
-
-
-
-                </option>
-
-
-
-
-
-
-
-                {cariler.map(
-
-
-
-                  (cari) => (
-
-
-
-                    <option
-
-
-
-                      key={cari.id}
-
-
-
-                      value={cari.id}
-
-
-
-                    >
-
-
-
-                      {cari.atlasKodu
-
-
-
-                        ? `${cari.atlasKodu} - `
-
-
-
-                        : ""}
-
-
-
-                      {cari.unvan}
-
-
-
-                    </option>
-
-
-
-                  )
-
-
-
-                )}
-
-
-
-
-
-
-
-              </select>
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* FATURA NO */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Fatura No
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <input
-
-
-
-                name="faturaNo"
-
-
-
-                placeholder="Varsa"
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* TARİH */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Tarih *
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <input
-
-
-
-                type="date"
-
-
-
-                name="tarih"
-
-
-
-                defaultValue={bugun}
-
-
-
-                required
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* ÜRÜN */}
-
-
-
-
-
-
-
-            {uiTur === "URUN" && (
-
-
-
-              <div className="md:col-span-2">
-
-
-
-
-
-
-
-                <label className={labelClass}>
-
-
-
-                  Ürün *
-
-
-
-                </label>
-
-
-
-
-
-
-
-                <select
-
-
-
-                  name="stokId"
-
-
-
-                  required
-
-
-
-                  defaultValue=""
-
-
-
-                  className={inputClass}
-
-
-
-                >
-
-
-
-
-
-
-
-                  <option value="">
-
-
-
-                    Ürün seçiniz
-
-
-
-                  </option>
-
-
-
-
-
-
-
-                  {stoklar.map(
-
-
-
-                    (stok) => (
-
-
-
-                      <option
-
-
-
-                        key={stok.id}
-
-
-
-                        value={stok.id}
-
-
-
-                      >
-
-
-
-                        {stok.kod} -{" "}
-
-
-
-                        {stok.ad} | Stok:{" "}
-
-
-
-                        {Number(
-
-
-
-                          stok.mevcutMiktar
-
-
-
-                        ).toLocaleString(
-
-
-
-                          "tr-TR"
-
-
-
-                        )}{" "}
-
-
-
-                        {stok.birim}
-
-
-
-                      </option>
-
-
-
-                    )
-
-
-
-                  )}
-
-
-
-
-
-
-
-                </select>
-
-
-
-              </div>
-
-
-
-            )}
-
-
-
-
-
-
-
-            {/* HİZMET */}
-
-
-
-
-
-
-
-            {uiTur ===
-
-
-
-              "HIZMET" && (
-
-
-
-              <div className="md:col-span-2">
-
-
-
-
-
-
-
-                <label className={labelClass}>
-
-
-
-                  Hizmet Açıklaması *
-
-
-
-                </label>
-
-
-
-
-
-
-
-                <input
-
-
-
-                  name="hizmetAciklama"
-
-
-
-                  required
-
-
-
-                  placeholder={
-
-
-
-                    uiTip === "SATIS"
-
-
-
-                      ? "Örn: Verilen paketleme / hizmet faturası"
-
-
-
-                      : "Örn: Alınan muhasebe / nakliye hizmeti"
-
-
-
-                  }
-
-
-
-                  className={inputClass}
-
-
-
-                />
-
-
-
-
-
-
-
-              </div>
-
-
-
-            )}
-
-
-
-
-
-
-
-            {/* MİKTAR */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Miktar *
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <input
-
-
-
-                name="miktar"
-
-
-
-                defaultValue="1"
-
-
-
-                required
-
-
-
-                inputMode="decimal"
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* BİRİM FİYAT */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Birim Fiyat *
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <input
-
-
-
-                name="birimFiyat"
-
-
-
-                required
-
-
-
-                inputMode="decimal"
-
-
-
-                placeholder="Örn: 10.000"
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* KDV */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                KDV %
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <input
-
-
-
-                name="kdvOrani"
-
-
-
-                defaultValue="20"
-
-
-
-                inputMode="decimal"
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* PARA BİRİMİ */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Para Birimi
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <select
-
-
-
-                name="paraBirimi"
-
-
-
-                defaultValue="TRY"
-
-
-
-                className={inputClass}
-
-
-
-              >
-
-
-
-                <option value="TRY">
-
-
-
-                  TRY - Türk Lirası
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="USD">
-
-
-
-                  USD - Dolar
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="EUR">
-
-
-
-                  EUR - Euro
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="GBP">
-
-
-
-                  GBP - Sterlin
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="RUB">
-
-
-
-                  RUB - Ruble
-
-
-
-                </option>
-
-
-
-              </select>
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* ÖDEME */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Ödeme Şekli
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <select
-
-
-
-                name="odemeSekli"
-
-
-
-                defaultValue="ACIK_HESAP"
-
-
-
-                className={inputClass}
-
-
-
-              >
-
-
-
-                <option value="ACIK_HESAP">
-
-
-
-                  Açık Hesap
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="NAKIT">
-
-
-
-                  Nakit
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="EFT_HAVALE">
-
-
-
-                  EFT / Havale
-
-
-
-                </option>
-
-
-
-
-
-
-
-                <option value="KREDI_KARTI">
-
-
-
-                  Kredi Kartı
-
-
-
-                </option>
-
-
-
-              </select>
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* HESAP */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Kasa / Banka / Kart
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <select
-
-
-
-                name="finansHesapId"
-
-
-
-                defaultValue=""
-
-
-
-                className={inputClass}
-
-
-
-              >
-
-
-
-                <option value="">
-
-
-
-                  Açık hesapsa boş bırakın
-
-
-
-                </option>
-
-
-
-
-
-
-
-                {hesaplar.map(
-
-
-
-                  (hesap) => (
-
-
-
-                    <option
-
-
-
-                      key={hesap.id}
-
-
-
-                      value={hesap.id}
-
-
-
-                    >
-
-
-
-                      {hesap.ad}
-
-
-
-                      {hesap.bankaAdi
-
-
-
-                        ? ` - ${hesap.bankaAdi}`
-
-
-
-                        : ""}
-
-
-
-                      {" | "}
-
-
-
-                      {hesap.tip}
-
-
-
-                      {" | "}
-
-
-
-                      {hesap.paraBirimi}
-
-
-
-                    </option>
-
-
-
-                  )
-
-
-
-                )}
-
-
-
-
-
-
-
-              </select>
-
-
-
-
-
-
-
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-
-
-
-                Nakit için KASA, EFT için BANKA,
-
-
-
-                kredi kartı için KREDİ KARTI hesabı seçin.
-
-
-
-              </p>
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* VADE */}
-
-
-
-
-
-
-
-            <div>
-
-
-
-              <label className={labelClass}>
-
-
-
-                Vade Tarihi
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <input
-
-
-
-                type="date"
-
-
-
-                name="vadeTarihi"
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-            </div>
-
-
-
-
-
-
-
-            {/* AÇIKLAMA */}
-
-
-
-
-
-
-
-            <div className="md:col-span-2">
-
-
-
-
-
-
-
-              <label className={labelClass}>
-
-
-
-                Açıklama
-
-
-
-              </label>
-
-
-
-
-
-
-
-              <textarea
-
-
-
-                name="aciklama"
-
-
-
-                rows={3}
-
-
-
-                placeholder="İsteğe bağlı"
-
-
-
-                className={inputClass}
-
-
-
-              />
-
-
-
-
-
-
-
-            </div>
-
-
-
 
 
 
@@ -5596,227 +2568,7 @@ export default async function YeniFaturaPage({
 
 
 
-          {/* MANTIK */}
-
-
-
-
-
-
-
-          <div className="mt-7 rounded-xl border border-cyan-900/50 bg-cyan-950/10 p-5">
-
-
-
-
-
-
-
-            {uiTip ===
-
-
-
-              "SATIS" ? (
-
-
-
-              <>
-
-
-
-                <p className="font-black text-emerald-400">
-
-
-
-                  Satış
-
-
-
-                </p>
-
-
-
-
-
-
-
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-
-
-
-                  Cari borcu artar.
-
-
-
-                  Ödeme alındıysa cari kapanır
-
-
-
-                  ve seçilen kasa/banka hesabına
-
-
-
-                  para girişi yapılır.
-
-
-
-                  {uiTur === "URUN" &&
-
-
-
-                    " Ürün stoğu azalır."}
-
-
-
-                </p>
-
-
-
-              </>
-
-
-
-            ) : (
-
-
-
-              <>
-
-
-
-                <p className="font-black text-orange-400">
-
-
-
-                  Alış
-
-
-
-                </p>
-
-
-
-
-
-
-
-                <p className="mt-2 text-sm leading-6 text-slate-300">
-
-
-
-                  Cariye olan borcumuz artar.
-
-
-
-                  Ödeme yapıldıysa cari kapanır
-
-
-
-                  ve seçilen kasa/banka hesabından
-
-
-
-                  para çıkışı yapılır.
-
-
-
-                  {uiTur === "URUN" &&
-
-
-
-                    " Ürün stoğu artar."}
-
-
-
-                </p>
-
-
-
-              </>
-
-
-
-            )}
-
-
-
-
-
-
-
-          </div>
-
-
-
-
-
-
-
-          {/* BUTON */}
-
-
-
-
-
-
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-
-
-
-
-
-
-
-            <button
-
-
-
-              type="submit"
-
-
-
-              className={`flex-1 rounded-xl px-6 py-4 text-lg font-black transition ${
-
-
-
-                uiTip === "SATIS"
-
-
-
-                  ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-
-
-
-                  : "bg-orange-500 text-slate-950 hover:bg-orange-400"
-
-
-
-              }`}
-
-
-
-            >
-
-
-
-              {uiTip === "SATIS"
-
-                ? uiTur === "HIZMET"
-
-                  ? "Verilen Hizmeti Kaydet"
-
-                  : "Satışı Kaydet"
-
-                : uiTur === "HIZMET"
-
-                ? "Alınan Hizmeti Kaydet"
-
-                : "Alışı Kaydet"}
-
-
-
-            </button>
+          <div className="flex flex-wrap gap-2">
 
 
 
@@ -5832,7 +2584,7 @@ export default async function YeniFaturaPage({
 
 
 
-              className="rounded-xl border border-slate-700 px-6 py-4 text-center font-bold text-slate-300 transition hover:bg-slate-800"
+              className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-900"
 
 
 
@@ -5840,9 +2592,97 @@ export default async function YeniFaturaPage({
 
 
 
-              Vazgeç
+              ← Ana Panel
 
 
+
+            </a>
+
+
+
+
+
+
+
+            <a
+
+
+
+              href="/beach/faturalar/yeni?tip=SATIS&tur=URUN"
+
+
+
+              className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-emerald-400"
+
+
+
+            >
+
+
+
+              + Satış
+
+
+
+            </a>
+
+
+
+
+
+
+
+            <a
+
+
+
+              href="/beach/faturalar/yeni?tip=ALIS&tur=URUN"
+
+
+
+              className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-orange-400"
+
+
+
+            >
+
+
+
+              + Alış
+
+
+
+            </a>
+
+
+
+
+
+
+
+            <a
+
+              href="/beach/faturalar/yeni?tip=SATIS&tur=HIZMET"
+
+              className="rounded-xl border border-sky-600 px-4 py-2.5 text-sm font-black text-sky-400 hover:bg-sky-950/30"
+
+            >
+
+              + Verilen Hizmet
+
+            </a>
+
+
+
+            <a
+
+              href="/beach/faturalar/yeni?tip=ALIS&tur=HIZMET"
+
+              className="rounded-xl border border-violet-600 px-4 py-2.5 text-sm font-black text-violet-400 hover:bg-violet-950/30"
+
+            >
+
+              + Alınan Hizmet
 
             </a>
 
@@ -5860,7 +2700,1306 @@ export default async function YeniFaturaPage({
 
 
 
-        </form>
+        </div>
+
+
+
+
+
+
+
+        {/* FİLTRELER */}
+
+
+
+
+
+
+
+        <div className="mb-5 flex flex-wrap gap-2">
+
+
+
+
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre === "TUMU"
+
+
+
+                ? "bg-cyan-500 text-slate-950"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Tümü
+
+
+
+          </a>
+
+
+
+
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar?tip=SATIS"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre === "SATIS"
+
+
+
+                ? "bg-emerald-500 text-slate-950"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Satış
+
+
+
+          </a>
+
+
+
+
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar?tip=ALIS"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre === "ALIS"
+
+
+
+                ? "bg-orange-500 text-slate-950"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Alış
+
+
+
+          </a>
+
+
+
+
+
+
+
+          <a
+
+            href="/beach/faturalar?tip=VERILEN_HIZMET"
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+              aktifFiltre === "VERILEN_HIZMET"
+
+                ? "bg-sky-500 text-slate-950"
+
+                : "border border-slate-700 text-slate-300"
+
+            }`}
+
+          >
+
+            Verilen Hizmet
+
+          </a>
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar?tip=ALINAN_HIZMET"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre ===
+
+
+
+              "ALINAN_HIZMET"
+
+
+
+                ? "bg-violet-500 text-white"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Alınan Hizmet
+
+
+
+          </a>
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+        {/* ÖZET */}
+
+
+
+
+
+
+
+        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-900 px-5 py-4">
+
+
+
+
+
+
+
+          <span className="text-sm text-slate-400">
+
+
+
+            Gösterilen kayıt:
+
+
+
+          </span>
+
+
+
+
+
+
+
+          <span className="ml-2 font-black text-white">
+
+
+
+            {faturalar.length}
+
+
+
+          </span>
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+        {/* TABLO */}
+
+
+
+
+
+
+
+        <div className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
+
+
+
+
+
+
+
+          {faturalar.length === 0 ? (
+
+
+
+            <div className="p-12 text-center">
+
+
+
+
+
+
+
+              <div className="text-4xl">
+
+
+
+                🧾
+
+
+
+              </div>
+
+
+
+
+
+
+
+              <p className="mt-4 font-bold text-slate-300">
+
+
+
+                Henüz fatura kaydı yok.
+
+
+
+              </p>
+
+
+
+
+
+
+
+            </div>
+
+
+
+          ) : (
+
+
+
+            <div className="overflow-x-auto">
+
+
+
+
+
+
+
+              <table className="w-full min-w-[1050px] text-sm">
+
+
+
+
+
+
+
+                <thead className="bg-slate-950/70">
+
+
+
+
+
+
+
+                  <tr className="text-left text-xs text-slate-400">
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Tarih
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Tür
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Fatura No
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Cari
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Ödeme
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Döviz
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4 text-right">
+
+
+
+                      Toplam
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4 text-right">
+
+
+
+                      İşlem
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                  </tr>
+
+
+
+
+
+
+
+                </thead>
+
+
+
+
+
+
+
+                <tbody>
+
+
+
+
+
+
+
+                  {faturalar.map(
+
+
+
+                    (fatura) => (
+
+
+
+                      <tr
+
+
+
+                        key={fatura.id}
+
+
+
+                        className="border-t border-slate-800 transition hover:bg-slate-800/30"
+
+
+
+                      >
+
+
+
+
+
+
+
+                        {/* TARİH */}
+
+
+
+
+
+
+
+                        <td className="whitespace-nowrap px-4 py-4 text-slate-300">
+
+
+
+                          {date(
+
+
+
+                            fatura.tarih
+
+
+
+                          )}
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* TÜR */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4">
+
+
+
+
+
+
+
+                          <span
+
+
+
+                            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${
+
+
+
+                              fatura.tip ===
+                              "SATIS"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : fatura.tip ===
+                                  "ALIS"
+                                ? "bg-orange-500/10 text-orange-400"
+                                : fatura.tip ===
+                                  "VERILEN_HIZMET"
+                                ? "bg-sky-500/10 text-sky-400"
+                                : "bg-violet-500/10 text-violet-400"
+
+
+
+                            }`}
+
+
+
+                          >
+
+
+
+                            {tipAdi(
+
+
+
+                              fatura.tip
+
+
+
+                            )}
+
+
+
+                          </span>
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* FATURA NO */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4 font-semibold text-slate-300">
+
+
+
+                          {fatura.faturaNo ??
+
+
+
+                            `#${fatura.id}`}
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* CARİ */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4">
+
+
+
+
+
+
+
+                          {fatura.cari ? (
+
+
+
+                            <a
+
+
+
+                              href={`/beach/cariler/${fatura.cari.id}`}
+
+
+
+                              className="font-semibold text-cyan-400 hover:underline"
+
+
+
+                            >
+
+
+
+                              {
+
+
+
+                                fatura.cari
+
+
+
+                                  .unvan
+
+
+
+                              }
+
+
+
+                            </a>
+
+
+
+                          ) : (
+
+
+
+                            "-"
+
+
+
+                          )}
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* ÖDEME */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4 text-xs text-slate-300">
+
+
+
+
+
+
+
+                          {odemeAdi(
+
+
+
+                            fatura.odemeSekli
+
+
+
+                          )}
+
+
+
+
+
+
+
+                          {fatura.odendi && (
+
+
+
+                            <div className="mt-1 text-[10px] font-bold text-emerald-400">
+
+
+
+                              ÖDENDİ
+
+
+
+                            </div>
+
+
+
+                          )}
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* PARA BİRİMİ */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4 font-bold">
+
+
+
+                          {
+
+
+
+                            fatura.paraBirimi
+
+
+
+                          }
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* TOPLAM */}
+
+
+
+
+
+
+
+                        <td className="whitespace-nowrap px-4 py-4 text-right text-base font-black">
+
+
+
+
+
+
+
+                          {money(
+
+
+
+                            Number(
+
+
+
+                              fatura.genelToplam
+
+
+
+                            ),
+
+
+
+                            fatura.paraBirimi
+
+
+
+                          )}
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* İŞLEM */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4">
+
+
+
+
+
+
+
+                          <div className="flex justify-end gap-2">
+
+
+
+
+
+
+
+                            {fatura.cari && (
+
+
+
+                              <a
+
+
+
+                                href={`/beach/cariler/${fatura.cari.id}`}
+
+
+
+                                className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-950/30"
+
+
+
+                              >
+
+
+
+                                Cari
+
+
+
+                              </a>
+
+
+
+                            )}
+
+
+
+
+
+
+
+                            <a
+
+
+
+                              href={`/beach/faturalar/${fatura.id}/duzenle`}
+
+
+
+                              className="rounded-lg border border-amber-600 px-3 py-2 text-xs font-black text-amber-400 hover:bg-amber-950/30"
+
+
+
+                            >
+
+
+
+                              Düzenle
+
+
+
+                            </a>
+
+
+
+
+
+
+
+                            <form
+
+
+
+                              action={
+
+
+
+                                faturaSil
+
+
+
+                              }
+
+
+
+                            >
+
+
+
+
+
+
+
+                              <input
+
+
+
+                                type="hidden"
+
+
+
+                                name="faturaId"
+
+
+
+                                value={
+
+
+
+                                  fatura.id
+
+
+
+                                }
+
+
+
+                              />
+
+
+
+
+
+
+
+                              <button
+
+
+
+                                type="submit"
+
+
+
+                                className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-500"
+
+
+
+                              >
+
+
+
+                                Sil
+
+
+
+                              </button>
+
+
+
+
+
+
+
+                            </form>
+
+
+
+
+
+
+
+                          </div>
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                      </tr>
+
+
+
+                    )
+
+
+
+                  )}
+
+
+
+
+
+
+
+                </tbody>
+
+
+
+
+
+
+
+              </table>
+
+
+
+
+
+
+
+            </div>
+
+
+
+          )}
+
+
+
+
+
+
+
+        </div>
+
+
+
+
+
+
+
+        {/* BİLGİ */}
+
+
+
+
+
+
+
+        <div className="mt-6 rounded-xl border border-red-900/50 bg-red-950/10 p-5">
+
+
+
+
+
+
+
+          <p className="font-black text-red-400">
+
+
+
+            Fatura Silme
+
+
+
+          </p>
+
+
+
+
+
+
+
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+
+
+
+            Bir fatura silindiğinde faturanın
+
+
+
+            oluşturduğu cari hareketleri de
+
+
+
+            kaldırılır. Peşin ödenmiş faturada
+
+
+
+            eşleşen kasa, banka veya kredi kartı
+
+
+
+            hareketi de silinir.
+
+
+
+          </p>
+
+
+
+
+
+
+
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+
+
+
+            Ürün satış faturası silinirse ürün
+
+
+
+            stoğa geri eklenir. Ürün alış faturası
+
+
+
+            silinirse faturayla eklenen miktar
+
+
+
+            stoktan geri düşülür ve ilgili stok
+
+
+
+            hareketi kaldırılır.
+
+
+
+          </p>
+
+
+
+
+
+
+
+          <p className="mt-2 text-sm font-bold text-amber-400">
+
+
+
+            Silme işlemi kalıcıdır. Gerçek
+
+
+
+            muhasebe kayıtlarında yalnızca yanlış
+
+
+
+            veya test faturalarında kullanın.
+
+
+
+          </p>
+
+
+
+
+
+
+
+        </div>
 
 
 
@@ -5869,6 +4008,10 @@ export default async function YeniFaturaPage({
 
 
       </div>
+
+
+
+
 
 
 

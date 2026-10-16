@@ -1,958 +1,2490 @@
 import { prisma } from "@/lib/prisma";
 
-import {
 
-  tcmbKurlariGetir,
-
-  tlKarsiligi,
-
-} from "@/lib/tcmb";
 
 import { revalidatePath } from "next/cache";
 
 
 
-function money(value: number) {
-
-  return new Intl.NumberFormat("tr-TR", {
-
-    style: "currency",
-
-    currency: "TRY",
-
-    minimumFractionDigits: 2,
-
-    maximumFractionDigits: 2,
-
-  }).format(value);
-
-}
 
 
 
-function currencyMoney(
+
+type Props = {
+
+
+
+  searchParams: Promise<{
+
+
+
+    tip?: string;
+
+
+
+  }>;
+
+
+
+};
+
+
+
+
+
+
+
+function money(
+
+
 
   value: number,
 
+
+
   currency: string
+
+
 
 ) {
 
+
+
   return new Intl.NumberFormat("tr-TR", {
+
+
 
     style: "currency",
 
+
+
     currency,
+
+
 
     minimumFractionDigits: 2,
 
+
+
     maximumFractionDigits: 2,
 
+
+
   }).format(value);
+
+
 
 }
 
 
 
-function dateTime(value: Date) {
+
+
+
+
+function date(value: Date) {
+
+
 
   return new Intl.DateTimeFormat("tr-TR", {
 
+
+
     day: "2-digit",
+
+
 
     month: "2-digit",
 
+
+
     year: "numeric",
 
-    hour: "2-digit",
 
-    minute: "2-digit",
 
   }).format(value);
+
+
 
 }
 
 
 
-function hareketAdi(tip: string) {
+
+
+
+
+function tipAdi(tip: string) {
+
+
 
   switch (tip) {
 
-    case "GIRIS":
-
-      return "Giriş";
 
 
-
-    case "CIKIS":
-
-      return "Çıkış";
+    case "SATIS":
 
 
 
-    case "TRANSFER_GIRIS":
-
-      return "Transfer Giriş";
+      return "Satış";
 
 
 
-    case "TRANSFER_CIKIS":
 
-      return "Transfer Çıkış";
+
+
+
+    case "ALIS":
+
+
+
+      return "Alış";
+
+    case "VERILEN_HIZMET":
+      return "Verilen Hizmet";
+
+
+
+
+
+
+
+    case "ALINAN_HIZMET":
+
+
+
+      return "Alınan Hizmet";
+
+
+
+
 
 
 
     default:
 
+
+
       return tip;
 
+
+
   }
+
+
 
 }
 
 
 
-function otomatikHareketMi(
 
-  tip: string,
 
-  aciklama: string,
 
-  transferRef: string | null
 
-) {
+function odemeAdi(odemeSekli: string) {
 
-  /*
 
-    Transfer hareketlerini tek taraftan geri almak
 
-    hesapları bozacağı için izin vermiyoruz.
+  switch (odemeSekli) {
 
-  */
 
-  if (
 
-    tip === "TRANSFER_GIRIS" ||
+    case "ACIK_HESAP":
 
-    tip === "TRANSFER_CIKIS"
 
-  ) {
 
-    return true;
+      return "Açık Hesap";
+
+
+
+
+
+
+
+    case "NAKIT":
+
+
+
+      return "Nakit";
+
+
+
+
+
+
+
+    case "EFT_HAVALE":
+
+
+
+      return "EFT / Havale";
+
+
+
+
+
+
+
+    case "KREDI_KARTI":
+
+
+
+      return "Kredi Kartı";
+
+
+
+
+
+
+
+    default:
+
+
+
+      return odemeSekli;
+
+
 
   }
 
 
-
-  /*
-
-    Geri alma sonucu oluşan ters kayıt tekrar
-
-    geri alınamaz.
-
-  */
-
-  if (
-
-    transferRef?.startsWith(
-
-      "GERI_AL:"
-
-    )
-
-  ) {
-
-    return true;
-
-  }
-
-
-
-  /*
-
-    Uygulamanın otomatik oluşturduğu hareketlerin
-
-    açıklamaları [ ... ] ile başlıyor.
-
-
-
-    Örnek:
-
-    [Satış Tahsilatı]
-
-    [Alış Ödemesi]
-
-    [Hizmet Ödemesi]
-
-    [Kredi Ödemesi]
-
-
-
-    Bunları banka ekranından tek başına geri almıyoruz.
-
-  */
-
-  if (
-
-    aciklama.trim().startsWith("[")
-
-  ) {
-
-    return true;
-
-  }
-
-
-
-  return false;
 
 }
 
 
 
-export default async function BankaPage() {
+
+
+
+
+export default async function FaturalarPage({
+
+
+
+  searchParams,
+
+
+
+}: Props) {
+
+
+
+  const query = await searchParams;
+
+
+
+
+
+
 
   const sirket =
 
+
+
     await prisma.sirket.findUnique({
+
+
 
       where: {
 
+
+
         kod: "BEACH",
+
+
 
       },
 
+
+
     });
+
+
+
+
 
 
 
   if (!sirket) {
 
+
+
     return (
+
+
 
       <main className="min-h-screen bg-slate-950 p-10 text-white">
 
-        Beach & Mağaza şirketi bulunamadı.
+
+
+        Beach & Mağaza bulunamadı.
+
+
 
       </main>
 
+
+
     );
+
+
 
   }
 
 
 
-  const [bankalar, kurlar] =
 
-    await Promise.all([
-
-      prisma.finansHesap.findMany({
-
-        where: {
-
-          sirketId: sirket.id,
-
-          aktif: true,
-
-          tip: "BANKA",
-
-        },
-
-
-
-        include: {
-
-          hareketler: {
-
-            include: {
-
-              cari: true,
-
-            },
-
-
-
-            orderBy: [
-
-              {
-
-                tarih: "desc",
-
-              },
-
-              {
-
-                id: "desc",
-
-              },
-
-            ],
-
-          },
-
-        },
-
-
-
-        orderBy: {
-
-          ad: "asc",
-
-        },
-
-      }),
-
-
-
-      tcmbKurlariGetir(),
-
-    ]);
-
-
-
-  const bankalarBakiyeli =
-
-    bankalar.map((banka) => {
-
-      const bakiye =
-
-        banka.hareketler.reduce(
-
-          (toplam, hareket) => {
-
-            const tutar =
-
-              Number(hareket.tutar);
-
-
-
-            if (
-
-              hareket.tip === "GIRIS" ||
-
-              hareket.tip ===
-
-                "TRANSFER_GIRIS"
-
-            ) {
-
-              return toplam + tutar;
-
-            }
-
-
-
-            if (
-
-              hareket.tip === "CIKIS" ||
-
-              hareket.tip ===
-
-                "TRANSFER_CIKIS"
-
-            ) {
-
-              return toplam - tutar;
-
-            }
-
-
-
-            return toplam;
-
-          },
-
-          0
-
-        );
-
-
-
-      const tlDegeri =
-
-        tlKarsiligi(
-
-          bakiye,
-
-          banka.paraBirimi,
-
-          kurlar
-
-        );
-
-
-
-      return {
-
-        ...banka,
-
-        bakiye,
-
-        tlDegeri,
-
-      };
-
-    });
-
-
-
-  const toplamBankaTl =
-
-    bankalarBakiyeli.reduce(
-
-      (toplam, banka) =>
-
-        toplam + banka.tlDegeri,
-
-      0
-
-    );
 
 
 
   /*
 
-    Tüm banka hesaplarındaki hareketleri
 
-    tek listede birleştiriyoruz.
+
+    ==================================================
+
+
+
+    FATURA SİL
+
+
+
+    ==================================================
+
+
 
   */
 
 
 
-  const tumHareketler =
-
-    bankalarBakiyeli
-
-      .flatMap((banka) =>
-
-        banka.hareketler.map(
-
-          (hareket) => ({
-
-            ...hareket,
 
 
 
-            finansHesap: {
 
-              id: banka.id,
-
-              ad: banka.ad,
-
-              bankaAdi:
-
-                banka.bankaAdi,
-
-              paraBirimi:
-
-                banka.paraBirimi,
-
-            },
-
-          })
-
-        )
-
-      )
-
-      .sort((a, b) => {
-
-        const tarihFarki =
-
-          b.tarih.getTime() -
-
-          a.tarih.getTime();
+  async function faturaSil(
 
 
-
-        if (tarihFarki !== 0) {
-
-          return tarihFarki;
-
-        }
-
-
-
-        return b.id - a.id;
-
-      })
-
-      .slice(0, 50);
-
-
-
-  async function hareketGeriAl(
 
     formData: FormData
 
+
+
   ) {
+
+
 
     "use server";
 
 
 
-    const hareketId =
+
+
+
+
+    const faturaId =
+
+
 
       Number(
 
-        formData.get("hareketId")
+
+
+        formData.get("faturaId")
+
+
 
       );
+
+
+
+
 
 
 
     if (
 
-      !Number.isInteger(
 
-        hareketId
 
-      ) ||
+      !Number.isInteger(faturaId) ||
 
-      hareketId <= 0
+
+
+      faturaId <= 0
+
+
 
     ) {
 
+
+
       throw new Error(
 
-        "Geçersiz hareket."
+
+
+        "Geçersiz fatura."
+
+
 
       );
 
+
+
     }
+
+
+
+
 
 
 
     const sirket =
 
+
+
       await prisma.sirket.findUnique({
+
+
 
         where: {
 
+
+
           kod: "BEACH",
+
+
 
         },
 
+
+
       });
+
+
+
+
 
 
 
     if (!sirket) {
 
+
+
       throw new Error(
+
+
 
         "Beach & Mağaza bulunamadı."
 
+
+
       );
+
+
 
     }
 
 
 
-    const hareket =
 
-      await prisma.finansHareket.findUnique({
+
+
+
+    const fatura =
+
+
+
+      await prisma.fatura.findFirst({
+
+
 
         where: {
 
-          id: hareketId,
+
+
+          id: faturaId,
+
+
+
+          sirketId: sirket.id,
+
+
 
         },
+
+
+
+
 
 
 
         include: {
 
-          finansHesap: true,
+
 
           cari: true,
 
+
+
         },
+
+
 
       });
 
 
 
-    if (
 
-      !hareket ||
 
-      hareket.finansHesap.sirketId !==
 
-        sirket.id ||
 
-      hareket.finansHesap.tip !==
+    if (!fatura) {
 
-        "BANKA"
 
-    ) {
 
       throw new Error(
 
-        "Banka hareketi bulunamadı."
+
+
+        "Fatura bulunamadı."
+
+
 
       );
+
+
 
     }
 
 
 
-    if (
-
-      otomatikHareketMi(
-
-        hareket.tip,
-
-        hareket.aciklama,
-
-        hareket.transferRef
-
-      )
-
-    ) {
-
-      throw new Error(
-
-        "Bu hareket otomatik veya transfer kaynaklı olduğu için buradan geri alınamaz."
-
-      );
-
-    }
 
 
 
-    const geriAlRef =
 
-      `GERI_AL:${hareket.id}`;
-
+    /*
 
 
-    const zatenGeriAlinmis =
 
-      await prisma.finansHareket.findFirst({
+      Fatura kalemlerini ayrıca çekiyoruz.
+
+
+
+    */
+
+
+
+
+
+
+
+    const kalemler =
+
+
+
+      await prisma.faturaKalemi.findMany({
+
+
 
         where: {
 
-          transferRef:
 
-            geriAlRef,
+
+          faturaId:
+
+
+
+            fatura.id,
+
+
 
         },
+
+
 
       });
 
 
 
-    if (zatenGeriAlinmis) {
 
-      throw new Error(
 
-        "Bu hareket daha önce geri alınmış."
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      EŞLEŞEN CARİ HAREKETLERİ
+
+
+
+      ==================================================
+
+
+
+    */
+
+
+
+
+
+
+
+    const cariHareketIdleri:
+
+
+
+      number[] = [];
+
+
+
+
+
+
+
+    const faturaReferansi =
+
+
+
+      fatura.faturaNo ||
+
+
+
+      `Fatura #${fatura.id}`;
+
+
+
+
+
+
+
+    /*
+
+
+
+      Ana fatura hareketi
+
+
+
+    */
+
+
+
+
+
+
+
+    const anaIslemTuru =
+
+      fatura.tip === "SATIS"
+
+        ? kalemler.some(
+
+            (kalem) =>
+
+              kalem.stokId !== null
+
+          )
+
+          ? "SATIS_URUN"
+
+          : "SATIS_HIZMET"
+
+        : fatura.tip === "VERILEN_HIZMET"
+
+        ? "SATIS_HIZMET"
+
+        : fatura.tip === "ALINAN_HIZMET"
+
+        ? "ALIS_HIZMET"
+
+        : "ALIS_URUN";
+
+
+
+    const anaCariHareket =
+
+
+
+      await prisma.cariHareket.findFirst({
+
+
+
+        where: {
+
+
+
+       cariId: fatura.cariId ?? undefined,
+
+
+
+
+
+
+
+          tarih:
+
+
+
+            fatura.tarih,
+
+
+
+
+
+
+
+          islemTuru:
+
+
+
+            anaIslemTuru,
+
+
+
+
+
+
+
+          aciklama: {
+
+
+
+            contains:
+
+
+
+              faturaReferansi,
+
+
+
+          },
+
+
+
+
+
+
+
+          ...(fatura.faturaNo
+
+
+
+            ? {
+
+
+
+                belgeNo:
+
+
+
+                  fatura.faturaNo,
+
+
+
+              }
+
+
+
+            : {}),
+
+
+
+        },
+
+
+
+
+
+
+
+        orderBy: {
+
+
+
+          id: "desc",
+
+
+
+        },
+
+
+
+
+
+
+
+        select: {
+
+
+
+          id: true,
+
+
+
+        },
+
+
+
+      });
+
+
+
+
+
+
+
+    if (anaCariHareket) {
+
+
+
+      cariHareketIdleri.push(
+
+
+
+        anaCariHareket.id
+
+
 
       );
 
+
+
     }
+
+
+
+
+
+
+
+    /*
+
+
+
+      Peşin ödeme/tahsilat cari hareketi
+
+
+
+    */
+
+
+
+
 
 
 
     if (
 
-      hareket.tip !== "GIRIS" &&
 
-      hareket.tip !== "CIKIS"
+
+      fatura.odemeSekli !==
+
+
+
+      "ACIK_HESAP"
+
+
 
     ) {
 
-      throw new Error(
-
-        "Bu hareket türü geri alınamaz."
-
-      );
-
-    }
 
 
+      const satisTarafi =
 
-    const tersFinansTipi =
+        fatura.tip === "SATIS" ||
 
-      hareket.tip === "GIRIS"
-
-        ? "CIKIS"
-
-        : "GIRIS";
+        fatura.tip === "VERILEN_HIZMET";
 
 
 
-    await prisma.$transaction(
+      const odemeCariIslemTuru =
 
-      async (tx) => {
+        satisTarafi
 
-        /*
+          ? "FATURA_TAHSILAT"
 
-          BANKA TERS KAYDI
-
-        */
+          : "FATURA_ODEME";
 
 
 
-        await tx.finansHareket.create({
-
-          data: {
-
-            finansHesapId:
-
-              hareket.finansHesapId,
+      const odemeCariHareket =
 
 
 
-            cariId:
+        await prisma.cariHareket.findFirst({
 
-              hareket.cariId,
+
+
+          where: {
+
+
+cariId: fatura.cariId ?? undefined,
+
+
+
+
 
 
 
             tarih:
 
-              new Date(),
+
+
+              fatura.tarih,
 
 
 
-            tip:
-
-              tersFinansTipi,
 
 
 
-            tutar:
 
-              hareket.tutar,
-
-
-
-            aciklama:
-
-              `[Geri Alındı] ${hareket.aciklama}`,
+            islemTuru:
 
 
 
-            belgeNo:
-
-              hareket.belgeNo,
+              odemeCariIslemTuru,
 
 
 
-            transferRef:
 
-              geriAlRef,
+
+
+
+            aciklama: {
+
+
+
+              contains:
+
+
+
+                faturaReferansi,
+
+
+
+            },
+
+
+
+
+
+
+
+            ...(fatura.faturaNo
+
+
+
+              ? {
+
+
+
+                  belgeNo:
+
+
+
+                    fatura.faturaNo,
+
+
+
+                }
+
+
+
+              : {}),
+
+
 
           },
+
+
+
+
+
+
+
+          orderBy: {
+
+
+
+            id: "desc",
+
+
+
+          },
+
+
+
+
+
+
+
+          select: {
+
+
+
+            id: true,
+
+
+
+          },
+
+
 
         });
 
 
 
+
+
+
+
+      if (odemeCariHareket) {
+
+
+
+        cariHareketIdleri.push(
+
+
+
+          odemeCariHareket.id
+
+
+
+        );
+
+
+
+      }
+
+
+
+    }
+
+
+
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      EŞLEŞEN FİNANS HAREKETİ
+
+
+
+      ==================================================
+
+
+
+    */
+
+
+
+
+
+
+
+    let finansHareketId:
+
+
+
+      number | null = null;
+
+
+
+
+
+
+
+    if (
+
+
+
+      fatura.odemeSekli !==
+
+
+
+        "ACIK_HESAP" &&
+
+
+
+      fatura.finansHesapId
+
+
+
+    ) {
+
+
+
+      const satisTarafi =
+
+        fatura.tip === "SATIS" ||
+
+        fatura.tip === "VERILEN_HIZMET";
+
+
+
+      const finansTip =
+
+        satisTarafi
+
+          ? "GIRIS"
+
+          : "CIKIS";
+
+
+
+      const finansAciklama =
+
+        satisTarafi
+
+          ? "[Satış Tahsilatı]"
+
+          : fatura.tip === "ALINAN_HIZMET"
+
+          ? "[Hizmet Ödemesi]"
+
+          : "[Alış Ödemesi]";
+
+
+
+      const finansHareket =
+
+
+
+        await prisma.finansHareket.findFirst({
+
+
+
+          where: {
+
+
+
+            finansHesapId:
+
+
+
+              fatura.finansHesapId,
+
+
+
+
+
+
+
+            cariId:
+
+
+
+              fatura.cariId,
+
+
+
+
+
+
+
+            tarih:
+
+
+
+              fatura.tarih,
+
+
+
+
+
+
+
+            tip:
+
+
+
+              finansTip,
+
+
+
+
+
+
+
+            tutar:
+
+
+
+              fatura.genelToplam,
+
+
+
+
+
+
+
+            aciklama: {
+
+
+
+              startsWith:
+
+
+
+                finansAciklama,
+
+
+
+            },
+
+
+
+
+
+
+
+            ...(fatura.faturaNo
+
+
+
+              ? {
+
+
+
+                  belgeNo:
+
+
+
+                    fatura.faturaNo,
+
+
+
+                }
+
+
+
+              : {
+
+
+
+                  belgeNo: null,
+
+
+
+                }),
+
+
+
+          },
+
+
+
+
+
+
+
+          orderBy: {
+
+
+
+            id: "desc",
+
+
+
+          },
+
+
+
+
+
+
+
+          select: {
+
+
+
+            id: true,
+
+
+
+          },
+
+
+
+        });
+
+
+
+
+
+
+
+      if (finansHareket) {
+
+
+
+        finansHareketId =
+
+
+
+          finansHareket.id;
+
+
+
+      }
+
+
+
+    }
+
+
+
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      STOK HAREKETLERİNİ BUL
+
+
+
+      ==================================================
+
+
+
+    */
+
+
+
+
+
+
+
+    const stokHareketIdleri:
+
+
+
+      number[] = [];
+
+
+
+
+
+
+
+    for (const kalem of kalemler) {
+
+
+
+      if (!kalem.stokId) {
+
+
+
+        continue;
+
+
+
+      }
+
+
+
+
+
+
+
+      const stokHareket =
+
+
+
+        await prisma.stokHareket.findFirst({
+
+
+
+          where: {
+
+
+
+            stokId:
+
+
+
+              kalem.stokId,
+
+
+
+
+
+
+
+            tarih:
+
+
+
+              fatura.tarih,
+
+
+
+
+
+
+
+            ...(fatura.faturaNo
+
+
+
+              ? {
+
+
+
+                  belgeNo:
+
+
+
+                    fatura.faturaNo,
+
+
+
+                }
+
+
+
+              : {
+
+
+
+                  belgeNo: null,
+
+
+
+                }),
+
+
+
+
+
+
+
+            ...(fatura.tip ===
+
+
+
+            "SATIS"
+
+
+
+              ? {
+
+
+
+                  cikis:
+
+
+
+                    kalem.miktar,
+
+
+
+                }
+
+
+
+              : {
+
+
+
+                  giris:
+
+
+
+                    kalem.miktar,
+
+
+
+                }),
+
+
+
+          },
+
+
+
+
+
+
+
+          orderBy: {
+
+
+
+            id: "desc",
+
+
+
+          },
+
+
+
+
+
+
+
+          select: {
+
+
+
+            id: true,
+
+
+
+          },
+
+
+
+        });
+
+
+
+
+
+
+
+      if (stokHareket) {
+
+
+
+        stokHareketIdleri.push(
+
+
+
+          stokHareket.id
+
+
+
+        );
+
+
+
+      }
+
+
+
+    }
+
+
+
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      TÜM SİLME / GERİ ALMA İŞLEMİ
+
+
+
+      ==================================================
+
+
+
+    */
+
+
+
+
+
+
+
+    await prisma.$transaction(
+
+
+
+      async (tx) => {
+
+
+
         /*
 
-          ORİJİNAL HAREKET CARİYE BAĞLIYSA
 
-          CARİYİ DE TERS KAYITLA DÜZELT
+
+          1) STOK MİKTARINI GERİ AL
+
+
+
+
+
+
+
+          SATIŞ siliniyorsa:
+
+
+
+          Daha önce stok azalmıştı.
+
+
+
+          Şimdi geri artır.
+
+
+
+
+
+
+
+          ALIŞ siliniyorsa:
+
+
+
+          Daha önce stok artmıştı.
+
+
+
+          Şimdi geri azalt.
+
+
 
         */
 
 
 
-        if (hareket.cariId) {
 
-          if (
 
-            hareket.tip === "GIRIS"
 
-          ) {
 
-            /*
+        for (const kalem of kalemler) {
 
-              Orijinal para girişi sırasında
 
-              cariye ALACAK yazılmıştı.
 
+          if (!kalem.stokId) {
 
 
-              Geri alırken BORÇ yazıyoruz.
 
-            */
+            continue;
 
 
-
-            await tx.cariHareket.create({
-
-              data: {
-
-                cariId:
-
-                  hareket.cariId,
-
-
-
-                tarih:
-
-                  new Date(),
-
-
-
-                tip: "BORC",
-
-
-
-                islemTuru:
-
-                  "FINANS_GERI_AL",
-
-
-
-                aciklama:
-
-                  `[Geri Alındı] ${hareket.aciklama}`,
-
-
-
-                belgeNo:
-
-                  hareket.belgeNo,
-
-
-
-                borc:
-
-                  hareket.tutar,
-
-
-
-                alacak: 0,
-
-              },
-
-            });
-
-          } else {
-
-            /*
-
-              Orijinal para çıkışı sırasında
-
-              cariye BORÇ yazılmıştı.
-
-
-
-              Geri alırken ALACAK yazıyoruz.
-
-            */
-
-
-
-            await tx.cariHareket.create({
-
-              data: {
-
-                cariId:
-
-                  hareket.cariId,
-
-
-
-                tarih:
-
-                  new Date(),
-
-
-
-                tip: "ALACAK",
-
-
-
-                islemTuru:
-
-                  "FINANS_GERI_AL",
-
-
-
-                aciklama:
-
-                  `[Geri Alındı] ${hareket.aciklama}`,
-
-
-
-                belgeNo:
-
-                  hareket.belgeNo,
-
-
-
-                borc: 0,
-
-
-
-                alacak:
-
-                  hareket.tutar,
-
-              },
-
-            });
 
           }
 
+
+
+
+
+
+
+          if (
+
+
+
+            fatura.tip === "SATIS"
+
+
+
+          ) {
+
+
+
+            await tx.stok.update({
+
+
+
+              where: {
+
+
+
+                id:
+
+
+
+                  kalem.stokId,
+
+
+
+              },
+
+
+
+
+
+
+
+              data: {
+
+
+
+                mevcutMiktar: {
+
+
+
+                  increment:
+
+
+
+                    kalem.miktar,
+
+
+
+                },
+
+
+
+              },
+
+
+
+            });
+
+
+
+          } else if (
+
+
+
+            fatura.tip === "ALIS"
+
+
+
+          ) {
+
+
+
+            await tx.stok.update({
+
+
+
+              where: {
+
+
+
+                id:
+
+
+
+                  kalem.stokId,
+
+
+
+              },
+
+
+
+
+
+
+
+              data: {
+
+
+
+                mevcutMiktar: {
+
+
+
+                  decrement:
+
+
+
+                    kalem.miktar,
+
+
+
+                },
+
+
+
+              },
+
+
+
+            });
+
+
+
+          }
+
+
+
         }
+
+
+
+
+
+
+
+        /*
+
+
+
+          2) STOK HAREKETLERİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        if (
+
+
+
+          stokHareketIdleri.length >
+
+
+
+          0
+
+
+
+        ) {
+
+
+
+          await tx.stokHareket.deleteMany({
+
+
+
+            where: {
+
+
+
+              id: {
+
+
+
+                in:
+
+
+
+                  stokHareketIdleri,
+
+
+
+              },
+
+
+
+            },
+
+
+
+          });
+
+
+
+        }
+
+
+
+
+
+
+
+        /*
+
+
+
+          3) CARİ HAREKETLERİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        if (
+
+
+
+          cariHareketIdleri.length >
+
+
+
+          0
+
+
+
+        ) {
+
+
+
+          await tx.cariHareket.deleteMany({
+
+
+
+            where: {
+
+
+
+              id: {
+
+
+
+                in:
+
+
+
+                  cariHareketIdleri,
+
+
+
+              },
+
+
+
+            },
+
+
+
+          });
+
+
+
+        }
+
+
+
+
+
+
+
+        /*
+
+
+
+          4) KASA / BANKA / KREDİ KARTI
+
+
+
+             HAREKETİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        if (finansHareketId) {
+
+
+
+          await tx.finansHareket.delete({
+
+
+
+            where: {
+
+
+
+              id:
+
+
+
+                finansHareketId,
+
+
+
+            },
+
+
+
+          });
+
+
+
+        }
+
+
+
+
+
+
+
+        /*
+
+
+
+          5) FATURA KALEMLERİNİ SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        await tx.faturaKalemi.deleteMany({
+
+
+
+          where: {
+
+
+
+            faturaId:
+
+
+
+              fatura.id,
+
+
+
+          },
+
+
+
+        });
+
+
+
+
+
+
+
+        /*
+
+
+
+          6) FATURAYI SİL
+
+
+
+        */
+
+
+
+
+
+
+
+        await tx.fatura.delete({
+
+
+
+          where: {
+
+
+
+            id:
+
+
+
+              fatura.id,
+
+
+
+          },
+
+
+
+        });
+
+
 
       }
 
-    );
 
-
-
-    revalidatePath(
-
-      "/beach/banka"
 
     );
 
 
 
+
+
+
+
+    /*
+
+
+
+      ==================================================
+
+
+
+      SAYFALARI YENİLE
+
+
+
+      ==================================================
+
+
+
+    */
+
+
+
+
+
+
+
     revalidatePath(
+
+
 
       "/beach"
 
+
+
     );
+
+
+
+
 
 
 
     revalidatePath(
 
-      "/beach/cariler"
+
+
+      "/beach/faturalar"
+
+
 
     );
 
 
 
-    if (hareket.cariId) {
 
-      revalidatePath(
 
-        `/beach/cariler/${hareket.cariId}`
 
-      );
 
-    }
+    revalidatePath(
+
+
+
+      "/beach/cariler"
+
+
+
+    );
+
+
+
+
+
+
+
+    revalidatePath(
+
+
+
+      `/beach/cariler/${fatura.cariId}`
+
+
+
+    );
+
+
+
+
+
+
+
+    revalidatePath(
+
+
+
+      "/beach/kasa"
+
+
+
+    );
+
+
+
+
+
+
+
+    revalidatePath(
+
+
+
+      "/beach/banka"
+
+
+
+    );
+
+
+
+
+
+
+
+    revalidatePath(
+
+
+
+      "/beach/stok"
+
+
+
+    );
+
+
+
+
+
+
+
+    revalidatePath(
+
+
+
+      "/beach/yonetim/stok"
+
+
+
+    );
+
+
 
   }
 
 
 
+
+
+
+
+  /*
+
+
+
+    ==================================================
+
+
+
+    FATURALAR
+
+
+
+    ==================================================
+
+
+
+  */
+
+
+
+
+
+
+
+  const tumFaturalar =
+
+
+
+    await prisma.fatura.findMany({
+
+
+
+      where: {
+
+
+
+        sirketId: sirket.id,
+
+
+
+      },
+
+
+
+
+
+
+
+      include: {
+
+
+
+        cari: true,
+
+
+
+      },
+
+
+
+
+
+
+
+      orderBy: [
+
+
+
+        {
+
+
+
+          tarih: "desc",
+
+
+
+        },
+
+
+
+        {
+
+
+
+          id: "desc",
+
+
+
+        },
+
+
+
+      ],
+
+
+
+    });
+
+
+
+
+
+
+
+  /*
+
+
+
+    ==================================================
+
+
+
+    FİLTRE
+
+
+
+    ==================================================
+
+
+
+  */
+
+
+
+
+
+
+
+  const aktifFiltre =
+
+
+
+    query.tip || "TUMU";
+
+
+
+
+
+
+
+  const faturalar =
+
+    aktifFiltre === "SATIS"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "SATIS"
+
+        )
+
+      : aktifFiltre === "ALIS"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "ALIS"
+
+        )
+
+      : aktifFiltre === "VERILEN_HIZMET"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "VERILEN_HIZMET"
+
+        )
+
+      : aktifFiltre === "ALINAN_HIZMET"
+
+      ? tumFaturalar.filter(
+
+          (fatura) =>
+
+            fatura.tip === "ALINAN_HIZMET"
+
+        )
+
+      : tumFaturalar;
+
+
+
   return (
+
+
 
     <main className="min-h-screen bg-slate-950 text-white">
 
-      <div className="mx-auto max-w-7xl px-6 py-10">
+
+
+
+
+
+
+      <div className="mx-auto w-full max-w-[1550px] px-4 py-8 md:px-6">
+
+
+
+
 
 
 
@@ -960,51 +2492,183 @@ export default async function BankaPage() {
 
 
 
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+
+
+
+
+        <div className="mb-7 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+
+
+
+
 
 
 
           <div>
 
+
+
+
+
+
+
             <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
 
+
+
               Beach & Mağaza
+
+
 
             </p>
 
 
 
-            <h1 className="mt-2 text-4xl font-black">
 
-              Banka
+
+
+
+            <h1 className="mt-2 text-3xl font-black md:text-4xl">
+
+
+
+              Faturalar
+
+
 
             </h1>
 
 
 
-            <p className="mt-2 text-slate-400">
 
-              Banka hesapları, EFT ve banka hareketleri
+
+
+
+            <p className="mt-2 text-sm text-slate-400">
+
+
+
+              Alış, satış, verilen ve alınan hizmet faturaları
+
+
 
             </p>
 
+
+
+
+
+
+
           </div>
 
 
 
-          <div className="flex flex-wrap gap-3">
+
+
+
+
+          <div className="flex flex-wrap gap-2">
+
+
+
+
 
 
 
             <a
+
+
 
               href="/beach"
 
-              className="rounded-xl border border-slate-700 px-5 py-3 font-semibold text-slate-300 transition hover:bg-slate-900"
+
+
+              className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-300 hover:bg-slate-900"
+
+
 
             >
 
-              ← Panele Dön
+
+
+              ← Ana Panel
+
+
+
+            </a>
+
+
+
+
+
+
+
+            <a
+
+
+
+              href="/beach/faturalar/yeni?tip=SATIS&tur=URUN"
+
+
+
+              className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-emerald-400"
+
+
+
+            >
+
+
+
+              + Satış
+
+
+
+            </a>
+
+
+
+
+
+
+
+            <a
+
+
+
+              href="/beach/faturalar/yeni?tip=ALIS&tur=URUN"
+
+
+
+              className="rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-black text-slate-950 hover:bg-orange-400"
+
+
+
+            >
+
+
+
+              + Alış
+
+
+
+            </a>
+
+
+
+
+
+
+
+            <a
+
+              href="/beach/faturalar/yeni?tip=SATIS&tur=HIZMET"
+
+              className="rounded-xl border border-sky-600 px-4 py-2.5 text-sm font-black text-sky-400 hover:bg-sky-950/30"
+
+            >
+
+              + Verilen Hizmet
 
             </a>
 
@@ -1012,47 +2676,27 @@ export default async function BankaPage() {
 
             <a
 
-              href="/beach/kasa-banka/yeni?tip=BANKA"
+              href="/beach/faturalar/yeni?tip=ALIS&tur=HIZMET"
 
-              className="rounded-xl border border-cyan-700 px-5 py-3 font-bold text-cyan-400 transition hover:bg-cyan-950/30"
+              className="rounded-xl border border-violet-600 px-4 py-2.5 text-sm font-black text-violet-400 hover:bg-violet-950/30"
 
             >
 
-              + Yeni Banka
+              + Alınan Hizmet
 
             </a>
 
 
 
-            <a
 
-              href="/beach/kasa-banka/hareket-yeni?tip=GIRIS"
-
-              className="rounded-xl bg-emerald-500 px-5 py-3 font-black text-slate-950 transition hover:bg-emerald-400"
-
-            >
-
-              + Gelen EFT
-
-            </a>
-
-
-
-            <a
-
-              href="/beach/kasa-banka/hareket-yeni?tip=CIKIS"
-
-              className="rounded-xl border border-red-700 px-5 py-3 font-bold text-red-400 transition hover:bg-red-950/30"
-
-            >
-
-              − Giden EFT
-
-            </a>
 
 
 
           </div>
+
+
+
+
 
 
 
@@ -1060,47 +2704,225 @@ export default async function BankaPage() {
 
 
 
-        {/* TOPLAM */}
 
 
 
-        <div className="mb-8 rounded-3xl border border-cyan-900/50 bg-cyan-950/10 p-8">
+
+        {/* FİLTRELER */}
 
 
 
-          <p className="text-sm font-bold uppercase tracking-[0.15em] text-slate-400">
-
-            Toplam Banka
-
-          </p>
 
 
 
-          <p
 
-            className={`mt-3 text-4xl font-black md:text-5xl ${
+        <div className="mb-5 flex flex-wrap gap-2">
 
-              toplamBankaTl >= 0
 
-                ? "text-cyan-400"
 
-                : "text-red-400"
+
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre === "TUMU"
+
+
+
+                ? "bg-cyan-500 text-slate-950"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Tümü
+
+
+
+          </a>
+
+
+
+
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar?tip=SATIS"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre === "SATIS"
+
+
+
+                ? "bg-emerald-500 text-slate-950"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Satış
+
+
+
+          </a>
+
+
+
+
+
+
+
+          <a
+
+
+
+            href="/beach/faturalar?tip=ALIS"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre === "ALIS"
+
+
+
+                ? "bg-orange-500 text-slate-950"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Alış
+
+
+
+          </a>
+
+
+
+
+
+
+
+          <a
+
+            href="/beach/faturalar?tip=VERILEN_HIZMET"
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+              aktifFiltre === "VERILEN_HIZMET"
+
+                ? "bg-sky-500 text-slate-950"
+
+                : "border border-slate-700 text-slate-300"
 
             }`}
 
           >
 
-            {money(toplamBankaTl)}
+            Verilen Hizmet
 
-          </p>
+          </a>
 
 
 
-          <p className="mt-3 text-sm text-slate-500">
+          <a
 
-            Tüm aktif banka hesaplarının TL karşılığı
 
-          </p>
+
+            href="/beach/faturalar?tip=ALINAN_HIZMET"
+
+
+
+            className={`rounded-xl px-4 py-2 text-sm font-bold ${
+
+
+
+              aktifFiltre ===
+
+
+
+              "ALINAN_HIZMET"
+
+
+
+                ? "bg-violet-500 text-white"
+
+
+
+                : "border border-slate-700 text-slate-300"
+
+
+
+            }`}
+
+
+
+          >
+
+
+
+            Alınan Hizmet
+
+
+
+          </a>
+
+
+
+
 
 
 
@@ -1108,147 +2930,55 @@ export default async function BankaPage() {
 
 
 
-        {/* HIZLI İŞLEMLER */}
 
 
 
-        <div className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
+        {/* ÖZET */}
 
 
-          <a
 
-            href="/beach/kasa-banka/hareket-yeni?tip=GIRIS"
 
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-emerald-600"
 
-          >
 
-            <div className="text-3xl">
 
-              📥
+        <div className="mb-6 rounded-xl border border-slate-800 bg-slate-900 px-5 py-4">
 
-            </div>
 
 
 
-            <h2 className="mt-4 text-xl font-black">
 
-              Gelen EFT
 
-            </h2>
 
+          <span className="text-sm text-slate-400">
 
 
-            <p className="mt-2 text-sm text-slate-400">
 
-              Bankaya gelen ödemeyi kaydet
+            Gösterilen kayıt:
 
-            </p>
 
-          </a>
 
+          </span>
 
 
-          <a
 
-            href="/beach/kasa-banka/hareket-yeni?tip=CIKIS"
 
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-red-600"
 
-          >
 
-            <div className="text-3xl">
 
-              📤
+          <span className="ml-2 font-black text-white">
 
-            </div>
 
 
+            {faturalar.length}
 
-            <h2 className="mt-4 text-xl font-black">
 
-              Giden EFT
 
-            </h2>
+          </span>
 
 
 
-            <p className="mt-2 text-sm text-slate-400">
 
-              Bankadan yapılan ödemeyi kaydet
-
-            </p>
-
-          </a>
-
-
-
-          <a
-
-            href="/beach/giderler/yeni"
-
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-orange-600"
-
-          >
-
-            <div className="text-3xl">
-
-              🧾
-
-            </div>
-
-
-
-            <h2 className="mt-4 text-xl font-black">
-
-              Banka Masrafı
-
-            </h2>
-
-
-
-            <p className="mt-2 text-sm text-slate-400">
-
-              Komisyon ve banka gideri gir
-
-            </p>
-
-          </a>
-
-
-
-          <a
-
-            href="/beach/kasa-banka/transfer"
-
-            className="rounded-2xl border border-slate-800 bg-slate-900 p-6 transition hover:border-amber-600"
-
-          >
-
-            <div className="text-3xl">
-
-              🔄
-
-            </div>
-
-
-
-            <h2 className="mt-4 text-xl font-black">
-
-              Kasa / Banka Transferi
-
-            </h2>
-
-
-
-            <p className="mt-2 text-sm text-slate-400">
-
-              Kasadan bankaya veya bankadan kasaya aktar
-
-            </p>
-
-          </a>
 
 
 
@@ -1256,7 +2986,15 @@ export default async function BankaPage() {
 
 
 
-        {/* BANKA HESAPLARI */}
+
+
+
+
+        {/* TABLO */}
+
+
+
+
 
 
 
@@ -1264,135 +3002,235 @@ export default async function BankaPage() {
 
 
 
-          <div className="border-b border-slate-800 p-6">
 
 
 
-            <h2 className="text-xl font-black">
 
-              Banka Hesapları
-
-            </h2>
+          {faturalar.length === 0 ? (
 
 
 
-            <p className="mt-1 text-sm text-slate-400">
-
-              Tanımlı aktif banka hesapları
-
-            </p>
+            <div className="p-12 text-center">
 
 
 
-          </div>
 
 
 
-          {bankalarBakiyeli.length === 0 ? (
 
-            <div className="p-14 text-center">
-
+              <div className="text-4xl">
 
 
-              <div className="text-5xl">
 
-                🏦
+                🧾
+
+
 
               </div>
 
 
 
-              <h3 className="mt-5 text-xl font-black">
-
-                Henüz banka hesabı yok
-
-              </h3>
 
 
 
-              <p className="mt-2 text-slate-400">
 
-                İlk banka hesabınızı oluşturabilirsiniz.
+              <p className="mt-4 font-bold text-slate-300">
+
+
+
+                Henüz fatura kaydı yok.
+
+
 
               </p>
 
 
 
+
+
+
+
             </div>
 
+
+
           ) : (
+
+
 
             <div className="overflow-x-auto">
 
 
 
-              <table className="w-full min-w-[1000px]">
 
 
 
-                <thead>
 
-                  <tr className="border-b border-slate-800 text-left text-sm text-slate-400">
-
+              <table className="w-full min-w-[1050px] text-sm">
 
 
-                    <th className="px-5 py-4">
 
-                      Hesap
+
+
+
+
+                <thead className="bg-slate-950/70">
+
+
+
+
+
+
+
+                  <tr className="text-left text-xs text-slate-400">
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Tarih
+
+
 
                     </th>
 
 
 
-                    <th className="px-5 py-4">
 
-                      Banka
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Tür
+
+
 
                     </th>
 
 
 
-                    <th className="px-5 py-4">
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Fatura No
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Cari
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
+
+                      Ödeme
+
+
+
+                    </th>
+
+
+
+
+
+
+
+                    <th className="px-4 py-4">
+
+
 
                       Döviz
 
-                    </th>
 
-
-
-                    <th className="px-5 py-4">
-
-                      IBAN
 
                     </th>
 
 
 
-                    <th className="px-5 py-4 text-right">
 
-                      Bakiye
+
+
+
+                    <th className="px-4 py-4 text-right">
+
+
+
+                      Toplam
+
+
 
                     </th>
 
 
 
-                    <th className="px-5 py-4 text-right">
 
-                      TL Karşılığı
 
-                    </th>
 
-                    <th className="px-5 py-4 text-right">
+
+                    <th className="px-4 py-4 text-right">
+
+
 
                       İşlem
 
+
+
                     </th>
+
+
+
+
 
 
 
                   </tr>
 
+
+
+
+
+
+
                 </thead>
+
+
+
+
 
 
 
@@ -1400,111 +3238,608 @@ export default async function BankaPage() {
 
 
 
-                  {bankalarBakiyeli.map(
 
-                    (banka) => (
+
+
+
+                  {faturalar.map(
+
+
+
+                    (fatura) => (
+
+
 
                       <tr
 
-                        key={banka.id}
 
-                        className="border-b border-slate-800/70"
+
+                        key={fatura.id}
+
+
+
+                        className="border-t border-slate-800 transition hover:bg-slate-800/30"
+
+
 
                       >
 
 
 
-                        <td className="px-5 py-5 font-black">
-
-                          {banka.ad}
-
-                        </td>
 
 
 
-                        <td className="px-5 py-5 text-slate-300">
 
-                          {banka.bankaAdi || "-"}
-
-                        </td>
+                        {/* TARİH */}
 
 
 
-                        <td className="px-5 py-5">
-
-                          {banka.paraBirimi}
-
-                        </td>
 
 
 
-                        <td className="px-5 py-5 text-sm text-slate-400">
 
-                          {banka.iban || "-"}
-
-                        </td>
+                        <td className="whitespace-nowrap px-4 py-4 text-slate-300">
 
 
 
-                        <td
+                          {date(
 
-                          className={`whitespace-nowrap px-5 py-5 text-right text-lg font-black ${
 
-                            banka.bakiye >= 0
 
-                              ? "text-cyan-400"
+                            fatura.tarih
 
-                              : "text-red-400"
 
-                          }`}
-
-                        >
-
-                          {currencyMoney(
-
-                            banka.bakiye,
-
-                            banka.paraBirimi
 
                           )}
 
+
+
                         </td>
 
 
 
-                        <td className="whitespace-nowrap px-5 py-5 text-right font-black">
 
-                          {money(
 
-                            banka.tlDegeri
 
-                          )}
 
-                        </td>
+                        {/* TÜR */}
 
-                        <td className="px-5 py-5 text-right">
 
-                          <a
 
-                            href={`/beach/kasa-banka/${banka.id}/duzenle`}
 
-                            className="inline-block rounded-lg border border-amber-600 px-3 py-2 text-sm font-bold text-amber-400 transition hover:bg-amber-950/30"
+
+
+
+                        <td className="px-4 py-4">
+
+
+
+
+
+
+
+                          <span
+
+
+
+                            className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-bold ${
+
+
+
+                              fatura.tip ===
+                              "SATIS"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : fatura.tip ===
+                                  "ALIS"
+                                ? "bg-orange-500/10 text-orange-400"
+                                : fatura.tip ===
+                                  "VERILEN_HIZMET"
+                                ? "bg-sky-500/10 text-sky-400"
+                                : "bg-violet-500/10 text-violet-400"
+
+
+
+                            }`}
+
+
 
                           >
 
-                            Düzenle
 
-                          </a>
+
+                            {tipAdi(
+
+
+
+                              fatura.tip
+
+
+
+                            )}
+
+
+
+                          </span>
+
+
+
+
+
+
 
                         </td>
+
+
+
+
+
+
+
+                        {/* FATURA NO */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4 font-semibold text-slate-300">
+
+
+
+                          {fatura.faturaNo ??
+
+
+
+                            `#${fatura.id}`}
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* CARİ */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4">
+
+
+
+
+
+
+
+                          {fatura.cari ? (
+
+
+
+                            <a
+
+
+
+                              href={`/beach/cariler/${fatura.cari.id}`}
+
+
+
+                              className="font-semibold text-cyan-400 hover:underline"
+
+
+
+                            >
+
+
+
+                              {
+
+
+
+                                fatura.cari
+
+
+
+                                  .unvan
+
+
+
+                              }
+
+
+
+                            </a>
+
+
+
+                          ) : (
+
+
+
+                            "-"
+
+
+
+                          )}
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* ÖDEME */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4 text-xs text-slate-300">
+
+
+
+
+
+
+
+                          {odemeAdi(
+
+
+
+                            fatura.odemeSekli
+
+
+
+                          )}
+
+
+
+
+
+
+
+                          {fatura.odendi && (
+
+
+
+                            <div className="mt-1 text-[10px] font-bold text-emerald-400">
+
+
+
+                              ÖDENDİ
+
+
+
+                            </div>
+
+
+
+                          )}
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* PARA BİRİMİ */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4 font-bold">
+
+
+
+                          {
+
+
+
+                            fatura.paraBirimi
+
+
+
+                          }
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* TOPLAM */}
+
+
+
+
+
+
+
+                        <td className="whitespace-nowrap px-4 py-4 text-right text-base font-black">
+
+
+
+
+
+
+
+                          {money(
+
+
+
+                            Number(
+
+
+
+                              fatura.genelToplam
+
+
+
+                            ),
+
+
+
+                            fatura.paraBirimi
+
+
+
+                          )}
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
+
+
+
+                        {/* İŞLEM */}
+
+
+
+
+
+
+
+                        <td className="px-4 py-4">
+
+
+
+
+
+
+
+                          <div className="flex justify-end gap-2">
+
+
+
+
+
+
+
+                            {fatura.cari && (
+
+
+
+                              <a
+
+
+
+                                href={`/beach/cariler/${fatura.cari.id}`}
+
+
+
+                                className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-400 hover:bg-cyan-950/30"
+
+
+
+                              >
+
+
+
+                                Cari
+
+
+
+                              </a>
+
+
+
+                            )}
+
+
+
+
+
+
+
+                            <a
+
+
+
+                              href={`/beach/faturalar/${fatura.id}/duzenle`}
+
+
+
+                              className="rounded-lg border border-amber-600 px-3 py-2 text-xs font-black text-amber-400 hover:bg-amber-950/30"
+
+
+
+                            >
+
+
+
+                              Düzenle
+
+
+
+                            </a>
+
+
+
+
+
+
+
+                            <form
+
+
+
+                              action={
+
+
+
+                                faturaSil
+
+
+
+                              }
+
+
+
+                            >
+
+
+
+
+
+
+
+                              <input
+
+
+
+                                type="hidden"
+
+
+
+                                name="faturaId"
+
+
+
+                                value={
+
+
+
+                                  fatura.id
+
+
+
+                                }
+
+
+
+                              />
+
+
+
+
+
+
+
+                              <button
+
+
+
+                                type="submit"
+
+
+
+                                className="rounded-lg bg-red-600 px-3 py-2 text-xs font-black text-white hover:bg-red-500"
+
+
+
+                              >
+
+
+
+                                Sil
+
+
+
+                              </button>
+
+
+
+
+
+
+
+                            </form>
+
+
+
+
+
+
+
+                          </div>
+
+
+
+
+
+
+
+                        </td>
+
+
+
+
 
 
 
                       </tr>
 
+
+
                     )
 
+
+
                   )}
+
+
+
+
 
 
 
@@ -1512,457 +3847,7 @@ export default async function BankaPage() {
 
 
 
-              </table>
 
-
-
-            </div>
-
-          )}
-
-
-
-        </div>
-
-
-
-        {/* SON HAREKETLER */}
-
-
-
-        <div className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-
-
-
-          <div className="border-b border-slate-800 p-6">
-
-
-
-            <h2 className="text-xl font-black">
-
-              Son Banka Hareketleri
-
-            </h2>
-
-
-
-            <p className="mt-1 text-sm text-slate-400">
-
-              Son 50 banka hareketi
-
-            </p>
-
-
-
-          </div>
-
-
-
-          {tumHareketler.length === 0 ? (
-
-            <div className="p-12 text-center text-slate-400">
-
-              Henüz banka hareketi bulunmuyor.
-
-            </div>
-
-          ) : (
-
-            <div className="overflow-x-auto">
-
-
-
-              <table className="w-full min-w-[1200px]">
-
-
-
-                <thead>
-
-                  <tr className="border-b border-slate-800 text-left text-sm text-slate-400">
-
-
-
-                    <th className="px-5 py-4">
-
-                      Tarih
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4">
-
-                      Hesap
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4">
-
-                      Cari
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4">
-
-                      İşlem
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4">
-
-                      Açıklama
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4">
-
-                      Belge
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4 text-right">
-
-                      Tutar
-
-                    </th>
-
-
-
-                    <th className="px-5 py-4 text-right">
-
-                      İşlem
-
-                    </th>
-
-
-
-                  </tr>
-
-                </thead>
-
-
-
-                <tbody>
-
-
-
-                  {tumHareketler.map(
-
-                    (hareket) => {
-
-                      const geriAlinabilir =
-
-                        !otomatikHareketMi(
-
-                          hareket.tip,
-
-                          hareket.aciklama,
-
-                          hareket.transferRef
-
-                        );
-
-
-
-                      const tutar =
-
-                        Number(
-
-                          hareket.tutar
-
-                        );
-
-
-
-                      const giris =
-
-                        hareket.tip ===
-
-                          "GIRIS" ||
-
-                        hareket.tip ===
-
-                          "TRANSFER_GIRIS";
-
-
-
-                      return (
-
-                        <tr
-
-                          key={hareket.id}
-
-                          className="border-b border-slate-800/70 transition hover:bg-slate-800/30"
-
-                        >
-
-
-
-                          <td className="whitespace-nowrap px-5 py-5 text-sm text-slate-300">
-
-                            {dateTime(
-
-                              hareket.tarih
-
-                            )}
-
-                          </td>
-
-
-
-                          <td className="px-5 py-5">
-
-
-
-                            <p className="font-bold">
-
-                              {
-
-                                hareket
-
-                                  .finansHesap
-
-                                  .ad
-
-                              }
-
-                            </p>
-
-
-
-                            <p className="mt-1 text-xs text-slate-500">
-
-                              {
-
-                                hareket
-
-                                  .finansHesap
-
-                                  .paraBirimi
-
-                              }
-
-                            </p>
-
-
-
-                          </td>
-
-
-
-                          <td className="px-5 py-5">
-
-
-
-                            {hareket.cari ? (
-
-                              <a
-
-                                href={`/beach/cariler/${hareket.cari.id}`}
-
-                                className="font-semibold text-cyan-400 hover:underline"
-
-                              >
-
-                                {
-
-                                  hareket.cari
-
-                                    .unvan
-
-                                }
-
-                              </a>
-
-                            ) : (
-
-                              <span className="text-slate-500">
-
-                                -
-
-                              </span>
-
-                            )}
-
-
-
-                          </td>
-
-
-
-                          <td className="px-5 py-5">
-
-
-
-                            <span
-
-                              className={`rounded-full px-3 py-1 text-xs font-bold ${
-
-                                giris
-
-                                  ? "bg-emerald-500/10 text-emerald-400"
-
-                                  : "bg-red-500/10 text-red-400"
-
-                              }`}
-
-                            >
-
-                              {hareketAdi(
-
-                                hareket.tip
-
-                              )}
-
-                            </span>
-
-
-
-                          </td>
-
-
-
-                          <td className="px-5 py-5 text-slate-300">
-
-                            {hareket.aciklama}
-
-                          </td>
-
-
-
-                          <td className="px-5 py-5 text-slate-400">
-
-                            {hareket.belgeNo ||
-
-                              "-"}
-
-                          </td>
-
-
-
-                          <td
-
-                            className={`whitespace-nowrap px-5 py-5 text-right text-lg font-black ${
-
-                              giris
-
-                                ? "text-emerald-400"
-
-                                : "text-red-400"
-
-                            }`}
-
-                          >
-
-                            {giris
-
-                              ? "+"
-
-                              : "-"}
-
-                            {currencyMoney(
-
-                              tutar,
-
-                              hareket
-
-                                .finansHesap
-
-                                .paraBirimi
-
-                            )}
-
-                          </td>
-
-
-
-                          <td className="px-5 py-5 text-right">
-
-
-
-                            {geriAlinabilir ? (
-
-                              <form
-
-                                action={
-
-                                  hareketGeriAl
-
-                                }
-
-                              >
-
-
-
-                                <input
-
-                                  type="hidden"
-
-                                  name="hareketId"
-
-                                  value={
-
-                                    hareket.id
-
-                                  }
-
-                                />
-
-
-
-                                <button
-
-                                  type="submit"
-
-                                  className="rounded-lg border border-red-700 px-3 py-2 text-sm font-bold text-red-400 transition hover:bg-red-950/30"
-
-                                >
-
-                                  Geri Al
-
-                                </button>
-
-
-
-                              </form>
-
-                            ) : (
-
-                              <span className="text-xs text-slate-600">
-
-                                Otomatik
-
-                              </span>
-
-                            )}
-
-
-
-                          </td>
-
-
-
-                        </tr>
-
-                      );
-
-                    }
-
-                  )}
-
-
-
-                </tbody>
 
 
 
@@ -1970,13 +3855,27 @@ export default async function BankaPage() {
 
 
 
+
+
+
+
             </div>
+
+
 
           )}
 
 
 
+
+
+
+
         </div>
+
+
+
+
 
 
 
@@ -1984,33 +3883,119 @@ export default async function BankaPage() {
 
 
 
-        <div className="mt-6 rounded-xl border border-amber-900/50 bg-amber-950/10 p-5">
 
 
 
-          <p className="font-black text-amber-400">
 
-            Geri Alma Mantığı
+        <div className="mt-6 rounded-xl border border-red-900/50 bg-red-950/10 p-5">
+
+
+
+
+
+
+
+          <p className="font-black text-red-400">
+
+
+
+            Fatura Silme
+
+
 
           </p>
+
+
+
+
 
 
 
           <p className="mt-2 text-sm leading-6 text-slate-400">
 
-            Manuel banka hareketleri silinmez.
 
-            Geri Al dediğinizde sistem aynı tutarda
 
-            ters hareket oluşturur. Hareket bir cariye
+            Bir fatura silindiğinde faturanın
 
-            bağlıysa cari hesabında da ters kayıt
 
-            oluşturulur. Böylece işlem geçmişi
 
-            kaybolmaz.
+            oluşturduğu cari hareketleri de
+
+
+
+            kaldırılır. Peşin ödenmiş faturada
+
+
+
+            eşleşen kasa, banka veya kredi kartı
+
+
+
+            hareketi de silinir.
+
+
 
           </p>
+
+
+
+
+
+
+
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+
+
+
+            Ürün satış faturası silinirse ürün
+
+
+
+            stoğa geri eklenir. Ürün alış faturası
+
+
+
+            silinirse faturayla eklenen miktar
+
+
+
+            stoktan geri düşülür ve ilgili stok
+
+
+
+            hareketi kaldırılır.
+
+
+
+          </p>
+
+
+
+
+
+
+
+          <p className="mt-2 text-sm font-bold text-amber-400">
+
+
+
+            Silme işlemi kalıcıdır. Gerçek
+
+
+
+            muhasebe kayıtlarında yalnızca yanlış
+
+
+
+            veya test faturalarında kullanın.
+
+
+
+          </p>
+
+
+
+
 
 
 
@@ -2018,10 +4003,24 @@ export default async function BankaPage() {
 
 
 
+
+
+
+
       </div>
+
+
+
+
+
+
 
     </main>
 
+
+
   );
+
+
 
 }

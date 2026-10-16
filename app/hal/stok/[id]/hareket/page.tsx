@@ -404,11 +404,11 @@ export default async function StokHareketPage({
           </div>
 
           <a
-            href={`/hal/stok/${stok.id}`}
-            className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-900"
-          >
-            ← Stok Detayı
-          </a>
+  href={`/hal/stok/${stok.id}`}
+  className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-900"
+>
+  ← Stok Detayı
+</a>
 
         </div>
 
