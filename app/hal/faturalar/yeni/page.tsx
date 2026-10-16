@@ -32,6 +32,8 @@ type Props = {
 
     error?: string;
 
+    kopya?: string;
+
 
 
   }>;
@@ -358,39 +360,7 @@ export default async function YeniFaturaPage({
 
 
 
-  const uiTip: UiTip =
-
-
-
-    query.tip === "ALIS"
-
-
-
-      ? "ALIS"
-
-
-
-      : "SATIS";
-
-
-
-
-
-
-
-  const uiTur: UiTur =
-
-
-
-    query.tur === "HIZMET"
-
-
-
-      ? "HIZMET"
-
-
-
-      : "URUN";
+  const kopyaId = Number(query.kopya ?? 0);
 
 
 
@@ -455,6 +425,133 @@ export default async function YeniFaturaPage({
 
 
   }
+
+
+
+  const kopyaFatura =
+    Number.isInteger(kopyaId) && kopyaId > 0
+      ? await prisma.fatura.findFirst({
+          where: {
+            id: kopyaId,
+            sirketId: sirket.id,
+          },
+          include: {
+            kalemler: {
+              orderBy: {
+                id: "asc",
+              },
+            },
+          },
+        })
+      : null;
+
+  const uiTip: UiTip =
+    kopyaFatura
+      ? kopyaFatura.tip === "SATIS" ||
+        kopyaFatura.tip === "VERILEN_HIZMET"
+        ? "SATIS"
+        : "ALIS"
+      : query.tip === "ALIS"
+      ? "ALIS"
+      : "SATIS";
+
+  const uiTur: UiTur =
+    kopyaFatura
+      ? kopyaFatura.tip === "VERILEN_HIZMET" ||
+        kopyaFatura.tip === "ALINAN_HIZMET"
+        ? "HIZMET"
+        : "URUN"
+      : query.tur === "HIZMET"
+      ? "HIZMET"
+      : "URUN";
+
+  const kopyaKasa =
+    kopyaFatura?.kalemler.find(
+      (kalem) => kalem.aciklama === "[KASA]"
+    ) ?? null;
+
+  const kopyaPalet =
+    kopyaFatura?.kalemler.find(
+      (kalem) => kalem.aciklama === "[PALET]"
+    ) ?? null;
+
+  const kopyaAnaKalem =
+    kopyaFatura?.kalemler.find(
+      (kalem) =>
+        kalem.aciklama !== "[KASA]" &&
+        kalem.aciklama !== "[PALET]"
+    ) ?? null;
+
+  const defaultCariId =
+    kopyaFatura?.cariId
+      ? String(kopyaFatura.cariId)
+      : "";
+
+  const defaultStokId =
+    kopyaAnaKalem?.stokId
+      ? String(kopyaAnaKalem.stokId)
+      : "";
+
+  const defaultHizmetAciklama =
+    uiTur === "HIZMET"
+      ? kopyaAnaKalem?.aciklama ?? ""
+      : "";
+
+  const defaultMiktar =
+    kopyaAnaKalem
+      ? String(Number(kopyaAnaKalem.miktar))
+      : "1";
+
+  const defaultBirimFiyat =
+    kopyaAnaKalem
+      ? String(Number(kopyaAnaKalem.birimFiyat))
+      : "";
+
+  const defaultKdvOrani =
+    kopyaAnaKalem
+      ? String(Number(kopyaAnaKalem.kdvOrani))
+      : "20";
+
+  const defaultKasaAdedi =
+    kopyaKasa
+      ? String(Number(kopyaKasa.miktar))
+      : "0";
+
+  const defaultKasaFiyati =
+    kopyaKasa
+      ? String(Number(kopyaKasa.birimFiyat))
+      : "0";
+
+  const defaultPaletAdedi =
+    kopyaPalet
+      ? String(Number(kopyaPalet.miktar))
+      : "0";
+
+  const defaultPaletFiyati =
+    kopyaPalet
+      ? String(Number(kopyaPalet.birimFiyat))
+      : "0";
+
+  const defaultParaBirimi =
+    kopyaFatura?.paraBirimi ?? "TRY";
+
+  const defaultOdemeSekli =
+    kopyaFatura?.odemeSekli ?? "ACIK_HESAP";
+
+  const defaultFinansHesapId =
+    kopyaFatura?.finansHesapId
+      ? String(kopyaFatura.finansHesapId)
+      : "";
+
+  const defaultVadeTarihi =
+    kopyaFatura?.vadeTarihi
+      ? kopyaFatura.vadeTarihi
+          .toISOString()
+          .slice(0, 10)
+      : "";
+
+  const defaultAciklama =
+    kopyaFatura?.aciklama ?? "";
 
 
 
@@ -4186,7 +4283,7 @@ if (miktar <= 0) {
 
 
 
-            href={`/hal/faturalar/yeni?tip=${uiTip}&tur=URUN`}
+            href={`/hal/faturalar/yeni?tip=${uiTip}&tur=URUN${kopyaFatura ? `&kopya=${kopyaFatura.id}` : ""}`}
 
 
 
@@ -4230,7 +4327,7 @@ if (miktar <= 0) {
 
 
 
-            href={`/hal/faturalar/yeni?tip=${uiTip}&tur=HIZMET`}
+            href={`/hal/faturalar/yeni?tip=${uiTip}&tur=HIZMET${kopyaFatura ? `&kopya=${kopyaFatura.id}` : ""}`}
 
 
 
@@ -4309,6 +4406,14 @@ if (miktar <= 0) {
 
 
 
+
+        {kopyaFatura && (
+          <div className="mb-6 rounded-xl border border-violet-700 bg-violet-950/20 p-4 text-sm text-violet-200">
+            <span className="font-black">Çoğaltma modu:</span>{" "}
+            Kaynak fatura #{kopyaFatura.faturaNo || kopyaFatura.id}.
+            Cari ve fatura detayları kopyalandı. Yeni fatura numarasını girip kaydedebilirsiniz.
+          </div>
+        )}
 
         {/* FORM */}
 
@@ -4434,7 +4539,7 @@ if (miktar <= 0) {
 
 
 
-                defaultValue=""
+                defaultValue={defaultCariId}
 
 
 
@@ -4698,7 +4803,7 @@ if (miktar <= 0) {
 
 
 
-                  defaultValue=""
+                  defaultValue={defaultStokId}
 
 
 
@@ -4866,6 +4971,10 @@ if (miktar <= 0) {
 
 
 
+                  defaultValue={defaultHizmetAciklama}
+
+
+
                   required
 
 
@@ -4950,7 +5059,7 @@ if (miktar <= 0) {
 
 
 
-                defaultValue="1"
+                defaultValue={defaultMiktar}
 
 
 
@@ -5014,6 +5123,10 @@ if (miktar <= 0) {
 
 
 
+                defaultValue={defaultBirimFiyat}
+
+
+
                 required
 
 
@@ -5050,7 +5163,7 @@ if (miktar <= 0) {
                   </label>
                   <input
                     name="kasaAdedi"
-                    defaultValue="0"
+                    defaultValue={defaultKasaAdedi}
                     inputMode="decimal"
                     placeholder="Örn: 500"
                     className={inputClass}
@@ -5063,7 +5176,7 @@ if (miktar <= 0) {
                   </label>
                   <input
                     name="kasaFiyati"
-                    defaultValue="0"
+                    defaultValue={defaultKasaFiyati}
                     inputMode="decimal"
                     placeholder="Örn: 15"
                     className={inputClass}
@@ -5076,7 +5189,7 @@ if (miktar <= 0) {
                   </label>
                   <input
                     name="paletAdedi"
-                    defaultValue="0"
+                    defaultValue={defaultPaletAdedi}
                     inputMode="decimal"
                     placeholder="Örn: 10"
                     className={inputClass}
@@ -5089,7 +5202,7 @@ if (miktar <= 0) {
                   </label>
                   <input
                     name="paletFiyati"
-                    defaultValue="0"
+                    defaultValue={defaultPaletFiyati}
                     inputMode="decimal"
                     placeholder="Örn: 250"
                     className={inputClass}
@@ -5134,7 +5247,7 @@ if (miktar <= 0) {
 
 
 
-                defaultValue="20"
+                defaultValue={defaultKdvOrani}
 
 
 
@@ -5194,7 +5307,7 @@ if (miktar <= 0) {
 
 
 
-                defaultValue="TRY"
+                defaultValue={defaultParaBirimi}
 
 
 
@@ -5330,7 +5443,7 @@ if (miktar <= 0) {
 
 
 
-                defaultValue="ACIK_HESAP"
+                defaultValue={defaultOdemeSekli}
 
 
 
@@ -5450,7 +5563,7 @@ if (miktar <= 0) {
 
 
 
-                defaultValue=""
+                defaultValue={defaultFinansHesapId}
 
 
 
@@ -5622,6 +5735,10 @@ if (miktar <= 0) {
 
 
 
+                defaultValue={defaultVadeTarihi}
+
+
+
                 className={inputClass}
 
 
@@ -5675,6 +5792,10 @@ if (miktar <= 0) {
 
 
                 name="aciklama"
+
+
+
+                defaultValue={defaultAciklama}
 
 
 
