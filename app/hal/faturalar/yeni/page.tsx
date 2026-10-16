@@ -1392,7 +1392,28 @@ export default async function YeniFaturaPage({
 
 
 
-    if (miktar <= 0) {
+    
+    const kasaAdedi =
+      uiTur === "URUN"
+        ? parseNumber(formData, "kasaAdedi")
+        : 0;
+
+    const kasaFiyati =
+      uiTur === "URUN"
+        ? parseNumber(formData, "kasaFiyati")
+        : 0;
+
+    const paletAdedi =
+      uiTur === "URUN"
+        ? parseNumber(formData, "paletAdedi")
+        : 0;
+
+    const paletFiyati =
+      uiTur === "URUN"
+        ? parseNumber(formData, "paletFiyati")
+        : 0;
+
+if (miktar <= 0) {
 
 
 
@@ -1476,39 +1497,49 @@ export default async function YeniFaturaPage({
 
 
 
-    const araToplam =
+    if (
+      kasaAdedi < 0 ||
+      kasaFiyati < 0 ||
+      paletAdedi < 0 ||
+      paletFiyati < 0
+    ) {
+      return geriDon(
+        "Kasa ve palet adet/fiyat bilgileri eksi olamaz."
+      );
+    }
 
-
-
+    const urunAraToplam =
       miktar * birimFiyat;
 
+    const kasaAraToplam =
+      kasaAdedi * kasaFiyati;
 
+    const paletAraToplam =
+      paletAdedi * paletFiyati;
 
-
-
-
+    const araToplam =
+      urunAraToplam +
+      kasaAraToplam +
+      paletAraToplam;
 
     const kdvToplam =
-
-
-
       araToplam *
-
-
-
       (kdvOrani / 100);
 
-
-
-
-
-
-
     const genelToplam =
-
-
-
       araToplam + kdvToplam;
+
+    const urunGenelToplam =
+      urunAraToplam +
+      urunAraToplam * (kdvOrani / 100);
+
+    const kasaGenelToplam =
+      kasaAraToplam +
+      kasaAraToplam * (kdvOrani / 100);
+
+    const paletGenelToplam =
+      paletAraToplam +
+      paletAraToplam * (kdvOrani / 100);
 
 
 
@@ -2450,7 +2481,7 @@ export default async function YeniFaturaPage({
 
 
 
-              genelToplam,
+              urunGenelToplam,
 
 
 
@@ -2466,7 +2497,38 @@ export default async function YeniFaturaPage({
 
 
 
-        /*
+        
+        if (uiTur === "URUN" && kasaAdedi > 0) {
+          await tx.faturaKalemi.create({
+            data: {
+              faturaId: fatura.id,
+              stokId: null,
+              aciklama: "[KASA]",
+              miktar: kasaAdedi,
+              birim: "ADET",
+              birimFiyat: kasaFiyati,
+              kdvOrani,
+              toplam: kasaGenelToplam,
+            },
+          });
+        }
+
+        if (uiTur === "URUN" && paletAdedi > 0) {
+          await tx.faturaKalemi.create({
+            data: {
+              faturaId: fatura.id,
+              stokId: null,
+              aciklama: "[PALET]",
+              miktar: paletAdedi,
+              birim: "ADET",
+              birimFiyat: paletFiyati,
+              kdvOrani,
+              toplam: paletGenelToplam,
+            },
+          });
+        }
+
+/*
 
 
 
@@ -4979,6 +5041,62 @@ export default async function YeniFaturaPage({
 
 
 
+
+            {uiTur === "URUN" && (
+              <>
+                <div>
+                  <label className={labelClass}>
+                    Kasa Adedi
+                  </label>
+                  <input
+                    name="kasaAdedi"
+                    defaultValue="0"
+                    inputMode="decimal"
+                    placeholder="Örn: 500"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>
+                    Kasa Birim Fiyatı
+                  </label>
+                  <input
+                    name="kasaFiyati"
+                    defaultValue="0"
+                    inputMode="decimal"
+                    placeholder="Örn: 15"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>
+                    Palet Adedi
+                  </label>
+                  <input
+                    name="paletAdedi"
+                    defaultValue="0"
+                    inputMode="decimal"
+                    placeholder="Örn: 10"
+                    className={inputClass}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>
+                    Palet Birim Fiyatı
+                  </label>
+                  <input
+                    name="paletFiyati"
+                    defaultValue="0"
+                    inputMode="decimal"
+                    placeholder="Örn: 250"
+                    className={inputClass}
+                  />
+                </div>
+              </>
+            )}
 
             {/* KDV */}
 

@@ -9,23 +9,11 @@ import { revalidatePath } from "next/cache";
 
 
 
-
 type Props = {
-
-
-
   searchParams: Promise<{
-
-
-
     tip?: string;
-
-
-
+    q?: string;
   }>;
-
-
-
 };
 
 
@@ -270,6 +258,9 @@ export default async function FaturalarPage({
 
 
   const query = await searchParams;
+  const arama = String(query.q ?? "")
+  .trim()
+  .toLocaleLowerCase("tr-TR");
 
 
 
@@ -2410,61 +2401,63 @@ cariId: fatura.cariId ?? undefined,
 
 
 
-  const aktifFiltre =
+const aktifFiltre =
+  query.tip || "TUMU";
 
+const tipFiltreliFaturalar =
+  aktifFiltre === "SATIS"
+    ? tumFaturalar.filter(
+        (fatura) =>
+          fatura.tip === "SATIS"
+      )
+    : aktifFiltre === "ALIS"
+    ? tumFaturalar.filter(
+        (fatura) =>
+          fatura.tip === "ALIS"
+      )
+    : aktifFiltre === "VERILEN_HIZMET"
+    ? tumFaturalar.filter(
+        (fatura) =>
+          fatura.tip === "VERILEN_HIZMET"
+      )
+    : aktifFiltre === "ALINAN_HIZMET"
+    ? tumFaturalar.filter(
+        (fatura) =>
+          fatura.tip === "ALINAN_HIZMET"
+      )
+    : tumFaturalar;
 
+const faturalar = arama
+  ? tipFiltreliFaturalar.filter(
+      (fatura) => {
+        const faturaNo =
+          String(fatura.faturaNo ?? "")
+            .toLocaleLowerCase("tr-TR");
 
-    query.tip || "TUMU";
+        const cari =
+          String(fatura.cari?.unvan ?? "")
+            .toLocaleLowerCase("tr-TR");
 
+        const aciklama =
+          String(fatura.aciklama ?? "")
+            .toLocaleLowerCase("tr-TR");
 
+        const id =
+          String(fatura.id);
 
+        const tutar =
+          String(Number(fatura.genelToplam));
 
-
-
-
-  const faturalar =
-
-    aktifFiltre === "SATIS"
-
-      ? tumFaturalar.filter(
-
-          (fatura) =>
-
-            fatura.tip === "SATIS"
-
-        )
-
-      : aktifFiltre === "ALIS"
-
-      ? tumFaturalar.filter(
-
-          (fatura) =>
-
-            fatura.tip === "ALIS"
-
-        )
-
-      : aktifFiltre === "VERILEN_HIZMET"
-
-      ? tumFaturalar.filter(
-
-          (fatura) =>
-
-            fatura.tip === "VERILEN_HIZMET"
-
-        )
-
-      : aktifFiltre === "ALINAN_HIZMET"
-
-      ? tumFaturalar.filter(
-
-          (fatura) =>
-
-            fatura.tip === "ALINAN_HIZMET"
-
-        )
-
-      : tumFaturalar;
+        return (
+          faturaNo.includes(arama) ||
+          cari.includes(arama) ||
+          aciklama.includes(arama) ||
+          id.includes(arama) ||
+          tutar.includes(arama)
+        );
+      }
+    )
+  : tipFiltreliFaturalar;
 
 
 
@@ -2596,6 +2589,14 @@ cariId: fatura.cariId ?? undefined,
 
 
 
+            </a>
+
+
+            <a
+              href="/hal/faturalar/excel"
+              className="rounded-xl border border-emerald-700 bg-emerald-950/30 px-4 py-2.5 text-sm font-black text-emerald-400 hover:bg-emerald-950/60"
+            >
+              📊 Excel'e Aktar
             </a>
 
 
@@ -2933,6 +2934,50 @@ cariId: fatura.cariId ?? undefined,
 
 
 
+
+
+        {/* ARAMA */}
+
+        <form
+          method="GET"
+          className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900 p-4 md:flex-row"
+        >
+          {aktifFiltre !== "TUMU" && (
+            <input
+              type="hidden"
+              name="tip"
+              value={aktifFiltre}
+            />
+          )}
+
+          <input
+            type="text"
+            name="q"
+            defaultValue={query.q ?? ""}
+            placeholder="Fatura no, cari, açıklama veya tutar ara..."
+            className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-500"
+          />
+
+          <button
+            type="submit"
+            className="rounded-xl bg-cyan-500 px-6 py-3 text-sm font-black text-slate-950 hover:bg-cyan-400"
+          >
+            🔎 Ara
+          </button>
+
+          {(query.q || aktifFiltre !== "TUMU") && (
+            <a
+              href={
+                aktifFiltre === "TUMU"
+                  ? "/hal/faturalar"
+                  : `/hal/faturalar?tip=${aktifFiltre}`
+              }
+              className="rounded-xl border border-slate-700 px-6 py-3 text-center text-sm font-bold text-slate-300 hover:bg-slate-800"
+            >
+              Temizle
+            </a>
+          )}
+        </form>
 
         {/* ÖZET */}
 
@@ -3696,6 +3741,14 @@ cariId: fatura.cariId ?? undefined,
                               className="rounded-lg border border-amber-600 px-3 py-2 text-xs font-black text-amber-400 hover:bg-amber-950/30"
                             >
                               Düzenle
+                            </a>
+
+
+                            <a
+                              href={`/hal/faturalar/yeni?kopya=${fatura.id}`}
+                              className="rounded-lg border border-violet-600 px-3 py-2 text-xs font-black text-violet-400 hover:bg-violet-950/30"
+                            >
+                              Çoğalt
                             </a>
 
                             <form
