@@ -2432,7 +2432,7 @@ const toplamVerilenCek =
 
 
 
-                className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
+                className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-4"
 
 
 
@@ -2440,7 +2440,7 @@ const toplamVerilenCek =
 
 
 
-                <p className="text-xs font-semibold text-slate-400">
+                <p className="text-[11px] font-semibold text-slate-400">
 
 
 
@@ -2464,7 +2464,7 @@ const toplamVerilenCek =
 
 
 
-                  className={`mt-3 whitespace-nowrap text-lg font-black tracking-tight xl:text-xl ${kart.renk}`}
+                  className={`mt-3 whitespace-nowrap text-sm font-black tracking-[-0.03em] 2xl:text-base ${kart.renk}`}
 
 
 
