@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import CariHareketSilButonu from "./CariHareketSilButonu";
+import CariEkstreExcelButonu from "./CariEkstreExcelButonu";
 
 
 type Props = {
@@ -668,14 +669,26 @@ async function hareketGeriAl(formData: FormData) {
 </a>
     
 
-          </div>
+          
+<CariEkstreExcelButonu
+  cariUnvan={cari.unvan}
+  acilisBorc={acilisBorc}
+  acilisAlacak={acilisAlacak}
+  hareketler={hareketler.map((hareket) => ({
+    tarih: date(hareket.tarih),
+    islem: hareketIsmi(hareket.aciklama, hareket.tip),
+    aciklama: temizAciklama(hareket.aciklama),
+    belgeNo: hareket.belgeNo ?? "",
+    borc: Number(hareket.borc),
+    alacak: Number(hareket.alacak),
+    bakiye: Number(hareket.yuruyenBakiye),
+  }))}
+  />
+           </div>
+      </div>
 
-        </div>
 
-        {/* ÖZET */}
-
-        <div className="grid gap-5 md:grid-cols-3">
-
+<div className="grid gap-5 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
 
             <p className="text-sm text-slate-400">
