@@ -1,10 +1,15 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import CariHareketSilButonu from "./CariHareketSilButonu";
+
 
 type Props = {
   params: Promise<{
     id: string;
+  }>;
+  searchParams: Promise<{
+    uyari?: string;
   }>;
 };
 
@@ -60,6 +65,9 @@ function hareketIsmi(
   aciklama: string,
   tip: string
 ) {
+  if (aciklama.startsWith("[Cari Fiş]")) {
+    return "Cari Fiş";
+  }
   if (aciklama.startsWith("[Satış]")) {
     return "Satış";
   }
@@ -154,6 +162,7 @@ function temizAciklama(
   );
 }
 
+
 function otomatikCariHareketMi(
   aciklama: string,
   islemTuru: string | null
@@ -166,15 +175,9 @@ function otomatikCariHareketMi(
     aciklama.startsWith("[Alınan Çek]") ||
     aciklama.startsWith("[Verilen Çek]") ||
     aciklama.startsWith("[Ciro Çek]") ||
-    aciklama.startsWith(
-      "[Ciro Çek Karşılıksız]"
-    ) ||
-    aciklama.startsWith(
-      "[Ciro Çek İptal]"
-    ) ||
-    aciklama.startsWith(
-      "[Geri Alındı]"
-    )
+    aciklama.startsWith("[Ciro Çek Karşılıksız]") ||
+    aciklama.startsWith("[Ciro Çek İptal]") ||
+    aciklama.startsWith("[Geri Alındı]")
   ) {
     return true;
   }
@@ -186,21 +189,21 @@ function otomatikCariHareketMi(
     islemTuru === "NAKIT_ODEME" ||
     islemTuru === "FINANS_GIRIS" ||
     islemTuru === "FINANS_CIKIS" ||
-    islemTuru === "FINANS_GERI_AL"
+    islemTuru === "FINANS_GERI_AL" ||
+    islemTuru === "CARI_GERI_AL"
   ) {
     return true;
   }
 
   return false;
 }
-
 export default async function CariDetayPage({
   params,
+  searchParams,
 }: Props) {
   const { id } = await params;
-
-  const cariId = Number(id);
-
+  const { uyari } = await searchParams;
+const cariId = Number(id);
   if (!Number.isInteger(cariId)) {
     notFound();
   }
@@ -211,114 +214,109 @@ export default async function CariDetayPage({
     ==================================================
   */
 
-  async function hareketGeriAl(
-    formData: FormData
+
+async function hareketGeriAl(formData: FormData) {
+  "use server";
+
+  const hareketId = Number(formData.get("hareketId"));
+
+  if (!Number.isInteger(hareketId) || hareketId <= 0) {
+    throw new Error("Geçersiz cari hareketi.");
+  }
+
+  const hareket = await prisma.cariHareket.findUnique({
+    where: {
+      id: hareketId,
+    },
+    include: {
+      cari: true,
+    },
+  });
+
+  if (!hareket || hareket.cariId !== cariId) {
+    throw new Error("Cari hareketi bulunamadı.");
+  }
+
+  /*
+    Otomatik kaynaklı hareketleri tek başına
+    geri almıyoruz. Bunlarda Sil kullanılabilir.
+  */
+  if (
+    otomatikCariHareketMi(
+      hareket.aciklama,
+      hareket.islemTuru
+    )
   ) {
-    "use server";
-
-    const hareketId = Number(
-      formData.get("hareketId")
+    throw new Error(
+      "Bu hareket otomatik kaynaklıdır. Geri Al yerine Sil kullanabilirsiniz."
     );
+  }
 
-    if (
-      !Number.isInteger(hareketId) ||
-      hareketId <= 0
-    ) {
-      throw new Error(
-        "Geçersiz cari hareketi."
-      );
-    }
+  /*
+    Cari fişin daha önce geri alınıp alınmadığını kontrol et.
+  */
+  if (hareket.islemTuru === "CARI_FIS") {
+    const yeniIsaret = `[Geri Alındı #${hareket.id}]`;
+    const eskiAciklama = `[Geri Alındı] ${hareket.aciklama}`;
 
-    const hareket =
-      await prisma.cariHareket.findUnique({
-        where: {
-          id: hareketId,
-        },
-
-        include: {
-          cari: true,
-        },
-      });
-
-    if (
-      !hareket ||
-      hareket.cariId !== cariId
-    ) {
-      throw new Error(
-        "Cari hareketi bulunamadı."
-      );
-    }
-
-    /*
-      Otomatik hareketleri tek başına
-      ters çevirmiyoruz.
-
-      Çünkü banka/kasa/fatura/çek tarafı
-      da etkilenmiş olabilir.
-
-      Bunlarda Sil kullanılabilir.
-    */
-
-    if (
-      otomatikCariHareketMi(
-        hareket.aciklama,
-        hareket.islemTuru
-      )
-    ) {
-      throw new Error(
-        "Bu hareket otomatik kaynaklıdır. Geri Al yerine Sil kullanabilirsiniz."
-      );
-    }
-
-    const tersTip =
-      hareket.tip === "BORC"
-        ? "ALACAK"
-        : "BORC";
-
-    await prisma.cariHareket.create({
-      data: {
-        cariId:
-          hareket.cariId,
-
-        tarih:
-          new Date(),
-
-        tip:
-          tersTip,
-
-        islemTuru:
-          "CARI_GERI_AL",
-
-        aciklama:
-          `[Geri Alındı] ${hareket.aciklama}`,
-
-        belgeNo:
-          hareket.belgeNo,
-
-        borc:
-          tersTip === "BORC"
-            ? hareket.alacak
-            : 0,
-
-        alacak:
-          tersTip === "ALACAK"
-            ? hareket.borc
-            : 0,
+    const oncekiGeriAlma = await prisma.cariHareket.findFirst({
+      where: {
+        cariId: hareket.cariId,
+        islemTuru: "CARI_GERI_AL",
+        OR: [
+          {
+            aciklama: {
+              startsWith: yeniIsaret,
+            },
+          },
+          {
+            aciklama: eskiAciklama,
+          },
+        ],
       },
     });
 
-    revalidatePath(
-      `/hal/cariler/${cariId}`
-    );
-
-    revalidatePath(
-      "/hal/cariler"
-    );
-
-    revalidatePath(
-      "/hal"
-    );
+ if (oncekiGeriAlma) {
+  redirect(`/hal/cariler/${cariId}?uyari=tekrar`);
+}
   }
+
+  const tersTip =
+    hareket.tip === "BORC"
+      ? "ALACAK"
+      : "BORC";
+
+  await prisma.cariHareket.create({
+    data: {
+      cariId: hareket.cariId,
+      tarih: new Date(),
+      tip: tersTip,
+      islemTuru: "CARI_GERI_AL",
+
+      aciklama:
+        hareket.islemTuru === "CARI_FIS"
+          ? `[Geri Alındı #${hareket.id}] ${hareket.aciklama}`
+          : `[Geri Alındı] ${hareket.aciklama}`,
+
+      belgeNo: hareket.belgeNo,
+
+      borc:
+        tersTip === "BORC"
+          ? hareket.alacak
+          : 0,
+
+      alacak:
+        tersTip === "ALACAK"
+          ? hareket.borc
+          : 0,
+    },
+  });
+
+  revalidatePath(`/hal/cariler/${cariId}`);
+  revalidatePath("/hal/cariler");
+  revalidatePath("/hal");
+}
+
 
   /*
     ==================================================
@@ -358,13 +356,22 @@ export default async function CariDetayPage({
         },
       });
 
-    if (
-      !hareket ||
-      hareket.cariId !== cariId
-    ) {
-      throw new Error(
-        "Cari hareketi bulunamadı."
-      );
+       if (!hareket || hareket.cariId !== cariId) {
+      throw new Error("Cari hareketi bulunamadı.");
+    }
+
+    // Cari fiş yalnızca cari hareketi olarak silinir.
+    // Kasa/banka hareketi aranmaz veya silinmez.
+    if (hareket.islemTuru === "CARI_FIS") {
+      await prisma.cariHareket.delete({
+        where: { id: hareket.id },
+      });
+
+      revalidatePath(`/hal/cariler/${cariId}`);
+      revalidatePath("/hal/cariler");
+      revalidatePath("/hal");
+
+      return;
     }
 
     /*
@@ -587,6 +594,14 @@ export default async function CariDetayPage({
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
+      {uyari === "tekrar" && (
+  <div
+    role="alert"
+    className="mx-auto mt-6 max-w-4xl rounded-xl border border-amber-700 bg-amber-950/40 p-4 font-semibold text-amber-300"
+  >
+    ⚠️ Bu cari fiş daha önce geri alınmış.
+  </div>
+)}
 
       <div className="mx-auto w-full max-w-[1550px] px-4 py-8 md:px-6">
 
@@ -638,12 +653,20 @@ export default async function CariDetayPage({
               Düzenle
             </a>
 
-            <a
-              href={`/hal/cariler/${cari.id}/hareket-yeni`}
-              className="rounded-xl bg-cyan-500 px-6 py-3 font-black text-slate-950 transition hover:bg-cyan-400"
-            >
-              + Yeni Hareket
-            </a>
+<a
+  href={`/hal/cariler/${cari.id}/hareket-yeni`}
+  className="rounded-xl bg-cyan-500 px-6 py-3 font-black text-slate-950 transition hover:bg-cyan-400"
+>
+  + Yeni Hareket
+</a>
+
+<a
+  href={`/hal/cariler/${cari.id}/fis-yeni`}
+  className="rounded-xl border border-emerald-700 px-5 py-3 font-bold text-emerald-400 transition hover:bg-emerald-950/30"
+>
+  + Cari Fişi
+</a>
+    
 
           </div>
 
@@ -1170,12 +1193,9 @@ export default async function CariDetayPage({
                                   }
                                 />
 
-                                <button
-                                  type="submit"
-                                  className="w-[70px] rounded-md bg-red-600 px-2 py-1.5 text-[10px] font-black text-white hover:bg-red-500"
-                                >
-                                  Sil
-                                </button>
+                               <CariHareketSilButonu
+  cariFisMi={hareket.islemTuru === "CARI_FIS"}
+/>
 
                               </form>
 
