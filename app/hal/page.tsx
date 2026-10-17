@@ -1289,9 +1289,18 @@ const toplamVerilenCek =
 
 
   const faturaTl = (
-  tutar: number,
-  paraBirimi: "TRY" | "USD" | "EUR" | "GBP" | "RUB"
-) =>
+
+
+
+    tutar: number,
+
+
+
+    paraBirimi: string
+
+
+
+  ) =>
 
 
 
@@ -1303,7 +1312,7 @@ const toplamVerilenCek =
 
 
 
-      paraBirimi,
+      paraBirimi as "TRY" | "USD" | "EUR" | "GBP" | "RUB",
 
 
 
@@ -2431,7 +2440,7 @@ const toplamVerilenCek =
 
 
 
-                <p className="text-sm font-semibold text-slate-400">
+                <p className="text-xs font-semibold text-slate-400">
 
 
 
@@ -2455,7 +2464,7 @@ const toplamVerilenCek =
 
 
 
-                  className={`mt-3 text-2xl font-black ${kart.renk}`}
+                  className={`mt-3 whitespace-nowrap text-lg font-black tracking-tight xl:text-xl ${kart.renk}`}
 
 
 
@@ -2753,7 +2762,7 @@ const toplamVerilenCek =
 
 
 
-              <p className="text-sm font-semibold text-slate-400">
+              <p className="text-xs font-semibold text-slate-400">
 
 
 
