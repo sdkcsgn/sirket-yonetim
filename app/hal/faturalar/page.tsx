@@ -3138,7 +3138,7 @@ const faturalar = arama
 
 
 
-              <table className="w-full min-w-[1250px] text-sm">
+              <table className="w-full min-w-[1350px] text-sm">
 
 
 
@@ -3223,6 +3223,12 @@ const faturalar = arama
                     <th className="px-4 py-4">
 
                       Ürün / Hizmet
+
+                    </th>
+
+                    <th className="px-4 py-4 text-right">
+
+                      Miktar
 
                     </th>
 
@@ -3598,6 +3604,32 @@ const faturalar = arama
 
 
 
+
+
+                        {/* MİKTAR */}
+
+<td className="whitespace-nowrap px-4 py-4 text-right font-bold text-slate-200">
+  {(() => {
+    const anaKalem =
+      fatura.kalemler.find(
+        (kalem) =>
+          kalem.aciklama !== "[KASA]" &&
+          kalem.aciklama !== "[PALET]"
+      );
+
+    if (!anaKalem) {
+      return "-";
+    }
+
+    const miktar =
+      new Intl.NumberFormat("tr-TR", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 3,
+      }).format(Number(anaKalem.miktar));
+
+    return `${miktar} KG`;
+  })()}
+</td>
 
 
                         {/* ÖDEME */}
