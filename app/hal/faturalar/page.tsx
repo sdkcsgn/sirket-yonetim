@@ -509,14 +509,18 @@ export default async function FaturalarPage({
 
 
         include: {
+  cari: true,
 
+  kalemler: {
+    include: {
+      stok: true,
+    },
 
-
-          cari: true,
-
-
-
-        },
+    orderBy: {
+      id: "asc",
+    },
+  },
+},
 
 
 
@@ -2327,8 +2331,15 @@ cariId: fatura.cariId ?? undefined,
 
         cari: true,
 
+        kalemler: {
+          include: {
+            stok: true,
+          },
 
-
+          orderBy: {
+            id: "asc",
+          },
+        },
       },
 
 
@@ -2448,10 +2459,26 @@ const faturalar = arama
         const tutar =
           String(Number(fatura.genelToplam));
 
+        const urunHizmet =
+          fatura.kalemler
+            .filter(
+              (kalem) =>
+                kalem.aciklama !== "[KASA]" &&
+                kalem.aciklama !== "[PALET]"
+            )
+            .map((kalem) =>
+              kalem.stok
+                ? `${kalem.stok.kod} ${kalem.stok.ad}`
+                : kalem.aciklama
+            )
+            .join(" ")
+            .toLocaleLowerCase("tr-TR");
+
         return (
           faturaNo.includes(arama) ||
           cari.includes(arama) ||
           aciklama.includes(arama) ||
+          urunHizmet.includes(arama) ||
           id.includes(arama) ||
           tutar.includes(arama)
         );
@@ -2954,7 +2981,7 @@ const faturalar = arama
             type="text"
             name="q"
             defaultValue={query.q ?? ""}
-            placeholder="Fatura no, cari, açıklama veya tutar ara..."
+            placeholder="Fatura no, cari, ürün/hizmet, açıklama veya tutar ara..."
             className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-500"
           />
 
@@ -3111,7 +3138,7 @@ const faturalar = arama
 
 
 
-              <table className="w-full min-w-[1050px] text-sm">
+              <table className="w-full min-w-[1250px] text-sm">
 
 
 
@@ -3192,6 +3219,13 @@ const faturalar = arama
 
 
                     </th>
+
+                    <th className="px-4 py-4">
+
+                      Ürün / Hizmet
+
+                    </th>
+
 
 
 
@@ -3521,6 +3555,44 @@ const faturalar = arama
 
 
                         </td>
+
+                        {/* ÜRÜN / HİZMET */}
+
+                        <td className="px-4 py-4">
+                          {(() => {
+                            const anaKalem =
+                              fatura.kalemler.find(
+                                (kalem) =>
+                                  kalem.aciklama !== "[KASA]" &&
+                                  kalem.aciklama !== "[PALET]"
+                              );
+
+                            if (!anaKalem) {
+                              return "-";
+                            }
+
+                            if (anaKalem.stok) {
+                              return (
+                                <div>
+                                  <p className="font-bold text-white">
+                                    {anaKalem.stok.ad}
+                                  </p>
+
+                                  <p className="mt-1 text-xs text-slate-500">
+                                    {anaKalem.stok.kod}
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <span className="text-slate-300">
+                                {anaKalem.aciklama}
+                              </span>
+                            );
+                          })()}
+                        </td>
+
 
 
 
