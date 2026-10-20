@@ -53,10 +53,14 @@ export const {
           return null;
         }
 
+        // Büyük/Küçük harf duyarsız arama yapıyoruz (HAL, hal, Hal hepsi eşleşir)
         const kullanici =
-          await prisma.kullanici.findUnique({
+          await prisma.kullanici.findFirst({
             where: {
-              kullaniciAdi,
+              kullaniciAdi: {
+                equals: kullaniciAdi,
+                mode: "insensitive",
+              },
             },
           });
 
@@ -244,24 +248,11 @@ export const {
       }
 
       /*
-        =====================================================
-        GÖRÜNTÜLEME KULLANICISI
-        =====================================================
-
-        GET / HEAD:
-        Sayfaları ve detayları görebilir.
-
-        POST / PUT / PATCH / DELETE:
-        Kesinlikle engellenir.
-
-        Böylece Server Action'lar da
-        merkezi olarak kilitlenir.
+        GORUNTULEME KULLANICISI
       */
       if (
         rol === "GORUNTULEME"
       ) {
-      
-
         if (pathname === "/") {
           return true;
         }
@@ -291,7 +282,7 @@ export const {
       }
 
       /*
-        ADMIN
+        ADMIN / YONETICI
         Her yere tam erişim.
       */
       if (rol === "ADMIN") {
@@ -303,6 +294,14 @@ export const {
         Yalnızca Beach şirketine erişir.
       */
       if (rol === "BEACH") {
+        if (
+          pathname.startsWith(
+            "/beach"
+          )
+        ) {
+          return true;
+        }
+
         if (pathname === "/") {
           return Response.redirect(
             new URL(
@@ -310,14 +309,6 @@ export const {
               request.nextUrl
             )
           );
-        }
-
-        if (
-          pathname.startsWith(
-            "/beach"
-          )
-        ) {
-          return true;
         }
 
         return Response.redirect(
@@ -333,6 +324,14 @@ export const {
         Yalnızca Hal şirketine erişir.
       */
       if (rol === "HAL") {
+        if (
+          pathname.startsWith(
+            "/hal"
+          )
+        ) {
+          return true;
+        }
+
         if (pathname === "/") {
           return Response.redirect(
             new URL(
@@ -340,14 +339,6 @@ export const {
               request.nextUrl
             )
           );
-        }
-
-        if (
-          pathname.startsWith(
-            "/hal"
-          )
-        ) {
-          return true;
         }
 
         return Response.redirect(
@@ -358,10 +349,6 @@ export const {
         );
       }
 
-      /*
-        Tanımsız rol güvenlik nedeniyle
-        hiçbir yere erişemez.
-      */
       return false;
     },
   },
