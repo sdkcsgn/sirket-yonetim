@@ -1,12 +1,8 @@
-import { auth } from "@/auth";
+"use client";
+
 import FinansGorumunu from "@/components/FinansGorumunu";
 
-export default async function Home() {
-  const session = await auth();
-  
-  // Güvenli rol okuma (session null/undefined gelse dahi hata vermez)
-  const userRol = session?.user && "rol" in session.user ? (session.user as any).rol : undefined;
-
+export default function Home() {
   const grupGelir = 0;
   const grupMaliyet = 0;
   const grupNet = 0;
@@ -61,7 +57,6 @@ export default async function Home() {
           grupKarda={grupKarda}
           beachOzet={beachOzet}
           halOzet={halOzet}
-          userRol={userRol}
         />
       </div>
     </main>
