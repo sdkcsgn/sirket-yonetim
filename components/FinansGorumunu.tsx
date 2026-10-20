@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 
 type SirketOzet = {
   kod: string;
@@ -24,6 +23,7 @@ type FinansGorumunuProps = {
   grupKarda: boolean;
   beachOzet?: SirketOzet;
   halOzet?: SirketOzet;
+  userRol?: string;
 };
 
 function money(value: number | undefined | null) {
@@ -43,12 +43,9 @@ export default function FinansGorumunu({
   grupKarda = true,
   beachOzet,
   halOzet,
+  userRol = "HAL",
 }: FinansGorumunuProps) {
-  const { data: session } = useSession();
   const [goster, setGoster] = useState(false);
-
-  // Kullanıcının rolü
-  const userRol = (session?.user as any)?.rol;
 
   // HAL ve GORUNTULEME rollerindeki kullanıcılar Kâr/Zarar ve Genel Toplamları GÖREMEZ
   const karZararGorebilir =
@@ -57,11 +54,10 @@ export default function FinansGorumunu({
   const MASK = "•••••••• ₺";
 
   const beachNet = beachOzet?.net ?? 0;
-  const halNet = halOzet?.net ?? 0;
 
   return (
     <>
-      {/* RAKAM GİZLE / GÖSTER BUTONU (Sadece yetkili kullanıcılar görebilir) */}
+      {/* RAKAM GİZLE / GÖSTER BUTONU */}
       {karZararGorebilir && (
         <div className="mb-6 flex justify-end">
           <button
