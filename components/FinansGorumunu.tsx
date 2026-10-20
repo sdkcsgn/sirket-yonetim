@@ -21,23 +21,56 @@ type FinansGorumunuProps = {
   grupMaliyet: number;
   grupNet: number;
   grupKarda: boolean;
-  beachOzet: SirketOzet;
-  halOzet: SirketOzet;
-  money: (val: number) => string;
+  beachOzet?: SirketOzet;
+  halOzet?: SirketOzet;
 };
 
+function money(value: number | undefined | null) {
+  const safeValue = typeof value === "number" && !isNaN(value) ? value : 0;
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(safeValue);
+}
+
 export default function FinansGorumunu({
-  grupGelir,
-  grupMaliyet,
-  grupNet,
-  grupKarda,
-  beachOzet,
-  halOzet,
-  money,
+  grupGelir = 0,
+  grupMaliyet = 0,
+  grupNet = 0,
+  grupKarda = true,
+  beachOzet = {
+    kod: "BEACH",
+    ad: "Beach & Mağaza",
+    satis: 0,
+    verilenHizmet: 0,
+    alis: 0,
+    alinanHizmet: 0,
+    gider: 0,
+    gelir: 0,
+    maliyet: 0,
+    net: 0,
+  },
+  halOzet = {
+    kod: "HAL",
+    ad: "Hal Komisyon & Soğuk Hava",
+    satis: 0,
+    verilenHizmet: 0,
+    alis: 0,
+    alinanHizmet: 0,
+    gider: 0,
+    gelir: 0,
+    maliyet: 0,
+    net: 0,
+  },
 }: FinansGorumunuProps) {
   const [goster, setGoster] = useState(false);
 
   const MASK = "•••••••• ₺";
+
+  const beachNet = beachOzet?.net ?? 0;
+  const halNet = halOzet?.net ?? 0;
 
   return (
     <>
@@ -119,14 +152,14 @@ export default function FinansGorumunu({
             <div className="bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Gelir</p>
               <p className="mt-2 text-xl font-black text-emerald-400">
-                {goster ? money(beachOzet.gelir) : MASK}
+                {goster ? money(beachOzet?.gelir) : MASK}
               </p>
             </div>
 
             <div className="bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Maliyet / Gider</p>
               <p className="mt-2 text-xl font-black text-orange-400">
-                {goster ? money(beachOzet.maliyet) : MASK}
+                {goster ? money(beachOzet?.maliyet) : MASK}
               </p>
             </div>
           </div>
@@ -135,32 +168,32 @@ export default function FinansGorumunu({
             <p className="text-sm text-slate-400">Net Kâr / Zarar</p>
             <p
               className={`mt-2 text-3xl font-black ${
-                beachOzet.net >= 0 ? "text-emerald-400" : "text-red-400"
+                beachNet >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
-              {goster ? money(beachOzet.net) : MASK}
+              {goster ? money(beachNet) : MASK}
             </p>
 
             <div className="mt-5 grid gap-2 text-sm text-slate-400">
               <div className="flex justify-between">
                 <span>Satış</span>
-                <span>{goster ? money(beachOzet.satis) : MASK}</span>
+                <span>{goster ? money(beachOzet?.satis) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Verilen Hizmet</span>
-                <span>{goster ? money(beachOzet.verilenHizmet) : MASK}</span>
+                <span>{goster ? money(beachOzet?.verilenHizmet) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Alış</span>
-                <span>{goster ? money(beachOzet.alis) : MASK}</span>
+                <span>{goster ? money(beachOzet?.alis) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Alınan Hizmet</span>
-                <span>{goster ? money(beachOzet.alinanHizmet) : MASK}</span>
+                <span>{goster ? money(beachOzet?.alinanHizmet) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Giderler</span>
-                <span>{goster ? money(beachOzet.gider) : MASK}</span>
+                <span>{goster ? money(beachOzet?.gider) : MASK}</span>
               </div>
             </div>
 
@@ -188,14 +221,14 @@ export default function FinansGorumunu({
             <div className="bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Gelir</p>
               <p className="mt-2 text-xl font-black text-emerald-400">
-                {goster ? money(halOzet.gelir) : MASK}
+                {goster ? money(halOzet?.gelir) : MASK}
               </p>
             </div>
 
             <div className="bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Maliyet / Gider</p>
               <p className="mt-2 text-xl font-black text-orange-400">
-                {goster ? money(halOzet.maliyet) : MASK}
+                {goster ? money(halOzet?.maliyet) : MASK}
               </p>
             </div>
           </div>
@@ -204,32 +237,32 @@ export default function FinansGorumunu({
             <p className="text-sm text-slate-400">Net Kâr / Zarar</p>
             <p
               className={`mt-2 text-3xl font-black ${
-                halOzet.net >= 0 ? "text-emerald-400" : "text-red-400"
+                halNet >= 0 ? "text-emerald-400" : "text-red-400"
               }`}
             >
-              {goster ? money(halOzet.net) : MASK}
+              {goster ? money(halNet) : MASK}
             </p>
 
             <div className="mt-5 grid gap-2 text-sm text-slate-400">
               <div className="flex justify-between">
                 <span>Satış</span>
-                <span>{goster ? money(halOzet.satis) : MASK}</span>
+                <span>{goster ? money(halOzet?.satis) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Verilen Hizmet</span>
-                <span>{goster ? money(halOzet.verilenHizmet) : MASK}</span>
+                <span>{goster ? money(halOzet?.verilenHizmet) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Alış</span>
-                <span>{goster ? money(halOzet.alis) : MASK}</span>
+                <span>{goster ? money(halOzet?.alis) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Alınan Hizmet</span>
-                <span>{goster ? money(halOzet.alinanHizmet) : MASK}</span>
+                <span>{goster ? money(halOzet?.alinanHizmet) : MASK}</span>
               </div>
               <div className="flex justify-between">
                 <span>Giderler</span>
-                <span>{goster ? money(halOzet.gider) : MASK}</span>
+                <span>{goster ? money(halOzet?.gider) : MASK}</span>
               </div>
             </div>
 
