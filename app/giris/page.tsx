@@ -1,108 +1,94 @@
-import { signIn } from "@/auth";
+"use client";
 
-type GirisPageProps = {
-  searchParams: Promise<{
-    error?: string;
-  }>;
-};
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
-export default async function GirisPage({
-  searchParams,
-}: GirisPageProps) {
-  const params =
-    await searchParams;
+export default function GirisSayfasi() {
+  const router = useRouter();
+  const [kullaniciAdi, setKullaniciAdi] = useState("");
+  const [sifre, setSifre] = useState("");
+  const [hata, setHata] = useState("");
+  const [yukleniyor, setYukleniyor] = useState(false);
 
-  const hataVar =
-    !!params.error;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setHata("");
+    setYukleniyor(true);
 
-  async function girisYap(
-    formData: FormData
-  ) {
-    "use server";
+    try {
+      const res = await signIn("credentials", {
+        kullaniciAdi,
+        sifre,
+        redirect: false,
+      });
 
-    await signIn("credentials", {
-      kullaniciAdi:
-        formData.get(
-          "kullaniciAdi"
-        ),
-
-      sifre:
-        formData.get("sifre"),
-
-      redirectTo: "/",
-    });
-  }
+      if (res?.error) {
+        setHata("Kullanıcı adı veya şifre hatalı!");
+        setYukleniyor(false);
+      } else {
+        router.push("/");
+        router.refresh();
+      }
+    } catch (err) {
+      setHata("Giriş yapılırken bir hata oluştu.");
+      setYukleniyor(false);
+    }
+  };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
-      <div className="w-full max-w-md">
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 p-4 text-white">
+      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
         <div className="mb-8 text-center">
-          <p className="text-sm font-bold uppercase tracking-[0.25em] text-emerald-400">
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-400">
             Şirket Yönetim Sistemi
           </p>
-
-          <h1 className="mt-3 text-4xl font-black">
-            Giriş Yap
-          </h1>
-
-          <p className="mt-3 text-slate-400">
-            Sisteme erişmek için
-            kullanıcı adınızı ve
-            şifrenizi girin.
-          </p>
+          <h1 className="mt-2 text-3xl font-black">Sisteme Giriş</h1>
         </div>
 
-        <form
-          action={girisYap}
-          className="rounded-3xl border border-slate-800 bg-slate-900 p-7 shadow-2xl"
-        >
-          {hataVar && (
-            <div className="mb-5 rounded-xl border border-red-800 bg-red-950/40 p-4 text-sm font-semibold text-red-300">
-              Kullanıcı adı veya
-              şifre hatalı.
-            </div>
-          )}
+        {hata && (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-center text-sm font-bold text-red-400">
+            {hata}
+          </div>
+        )}
 
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="mb-2 block text-sm font-bold text-slate-300">
               Kullanıcı Adı
             </label>
-
             <input
               type="text"
-              name="kullaniciAdi"
               required
-              autoComplete="username"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-cyan-500"
+              value={kullaniciAdi}
+              onChange={(e) => setKullaniciAdi(e.target.value)}
+              placeholder="Örn: HAL"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 font-medium text-white outline-none focus:border-emerald-500"
             />
           </div>
 
-          <div className="mt-5">
+          <div>
             <label className="mb-2 block text-sm font-bold text-slate-300">
               Şifre
             </label>
-
             <input
               type="password"
-              name="sifre"
               required
-              autoComplete="current-password"
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-cyan-500"
+              value={sifre}
+              onChange={(e) => setSifre(e.target.value)}
+              placeholder="••••••••"
+              className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 font-medium text-white outline-none focus:border-emerald-500"
             />
           </div>
 
           <button
             type="submit"
-            className="mt-6 w-full rounded-xl bg-emerald-500 px-5 py-4 text-lg font-black text-slate-950 transition hover:bg-emerald-400"
+            disabled={yukleniyor}
+            className="w-full rounded-xl bg-emerald-500 py-3.5 font-black text-slate-950 transition hover:bg-emerald-400 disabled:opacity-50"
           >
-            Giriş Yap
+            {yukleniyor ? "Giriş Yapılıyor..." : "Giriş Yap →"}
           </button>
         </form>
-
-        <p className="mt-6 text-center text-xs text-slate-600">
-          Yetkisiz erişim
-          yasaktır.
-        </p>
       </div>
     </main>
   );
