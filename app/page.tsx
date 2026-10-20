@@ -1,14 +1,7 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import FinansGorumunu from "@/components/FinansGorumunu";
+"use client";
 
-type PageProps = {
-  searchParams: Promise<{
-    donem?: string;
-    baslangic?: string;
-    bitis?: string;
-  }>;
-};
+import { useState } from "react";
+import Link from "next/link";
 
 type SirketOzet = {
   kod: string;
@@ -23,381 +16,253 @@ type SirketOzet = {
   net: number;
 };
 
-function money(value: number) {
-  return new Intl.NumberFormat("tr-TR", {
-    style: "currency",
-    currency: "TRY",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+type FinansGorumunuProps = {
+  grupGelir: number;
+  grupMaliyet: number;
+  grupNet: number;
+  grupKarda: boolean;
+  beachOzet: SirketOzet;
+  halOzet: SirketOzet;
+  money: (val: number) => string;
+};
 
-function tarihInputValue(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+export default function FinansGorumunu({
+  grupGelir,
+  grupMaliyet,
+  grupNet,
+  grupKarda,
+  beachOzet,
+  halOzet,
+  money,
+}: FinansGorumunuProps) {
+  const [goster, setGoster] = useState(false);
 
-  return `${year}-${month}-${day}`;
-}
-
-function gunBaslangici(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function gunSonu(date: Date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
-}
-
-export default async function Home({ searchParams }: PageProps) {
-  const params = await searchParams;
-
-  // TypeScript tip hatasını önlemek için donem değişkeni açıkça string yapıldı
-  const donem: string = params.donem ?? "ay";
-
-  const simdi = new Date();
-
-  let baslangic: Date | undefined;
-  let bitis: Date | undefined;
-
-  if (donem === "bugun") {
-    baslangic = gunBaslangici(simdi);
-    bitis = gunSonu(simdi);
-  }
-
-  if (donem === "ay") {
-    baslangic = new Date(
-      simdi.getFullYear(),
-      simdi.getMonth(),
-      1,
-      0,
-      0,
-      0,
-      0
-    );
-
-    bitis = gunSonu(simdi);
-  }
-
-  if (donem === "yil") {
-    baslangic = new Date(
-      simdi.getFullYear(),
-      0,
-      1,
-      0,
-      0,
-      0,
-      0
-    );
-
-    bitis = gunSonu(simdi);
-  }
-
-  if (
-    donem === "ozel" &&
-    params.baslangic &&
-    params.bitis
-  ) {
-    baslangic = gunBaslangici(
-      new Date(`${params.baslangic}T00:00:00`)
-    );
-
-    bitis = gunSonu(
-      new Date(`${params.bitis}T00:00:00`)
-    );
-  }
-
-  const tarihWhere =
-    baslangic && bitis
-      ? {
-          gte: baslangic,
-          lte: bitis,
-        }
-      : undefined;
-
-  const sirketler = await prisma.sirket.findMany({
-    where: {
-      kod: {
-        in: ["BEACH", "HAL"],
-      },
-    },
-    select: {
-      id: true,
-      kod: true,
-    },
-  });
-
-  const beach = sirketler.find((sirket) => sirket.kod === "BEACH");
-  const hal = sirketler.find((sirket) => sirket.kod === "HAL");
-
-  const sirketIdleri = sirketler.map((sirket) => sirket.id);
-
-  const [faturalar, giderler] = await Promise.all([
-    prisma.fatura.findMany({
-      where: {
-        sirketId: {
-          in: sirketIdleri,
-        },
-        ...(tarihWhere
-          ? {
-              tarih: tarihWhere,
-            }
-          : {}),
-      },
-      select: {
-        sirketId: true,
-        tip: true,
-        genelToplam: true,
-      },
-    }),
-
-    prisma.gider.findMany({
-      where: {
-        sirketId: {
-          in: sirketIdleri,
-        },
-        ...(tarihWhere
-          ? {
-              tarih: tarihWhere,
-            }
-          : {}),
-      },
-      select: {
-        sirketId: true,
-        tutar: true,
-      },
-    }),
-  ]);
-
-  function sirketOzeti(
-    sirketId: number | undefined,
-    kod: string,
-    ad: string
-  ): SirketOzet {
-    if (!sirketId) {
-      return {
-        kod,
-        ad,
-        satis: 0,
-        verilenHizmet: 0,
-        alis: 0,
-        alinanHizmet: 0,
-        gider: 0,
-        gelir: 0,
-        maliyet: 0,
-        net: 0,
-      };
-    }
-
-    const sirketFaturalari = faturalar.filter(
-      (fatura) => fatura.sirketId === sirketId
-    );
-
-    const sirketGiderleri = giderler.filter(
-      (gider) => gider.sirketId === sirketId
-    );
-
-    const satis = sirketFaturalari
-      .filter((fatura) => fatura.tip === "SATIS")
-      .reduce((toplam, fatura) => toplam + Number(fatura.genelToplam), 0);
-
-    const verilenHizmet = sirketFaturalari
-      .filter((fatura) => fatura.tip === "VERILEN_HIZMET")
-      .reduce((toplam, fatura) => toplam + Number(fatura.genelToplam), 0);
-
-    const alis = sirketFaturalari
-      .filter((fatura) => fatura.tip === "ALIS")
-      .reduce((toplam, fatura) => toplam + Number(fatura.genelToplam), 0);
-
-    const alinanHizmet = sirketFaturalari
-      .filter((fatura) => fatura.tip === "ALINAN_HIZMET")
-      .reduce((toplam, fatura) => toplam + Number(fatura.genelToplam), 0);
-
-    const gider = sirketGiderleri.reduce(
-      (toplam, kayit) => toplam + Number(kayit.tutar),
-      0
-    );
-
-    const gelir = satis + verilenHizmet;
-    const maliyet = alis + alinanHizmet + gider;
-    const net = gelir - maliyet;
-
-    return {
-      kod,
-      ad,
-      satis,
-      verilenHizmet,
-      alis,
-      alinanHizmet,
-      gider,
-      gelir,
-      maliyet,
-      net,
-    };
-  }
-
-  const beachOzet = sirketOzeti(
-    beach?.id,
-    "BEACH",
-    "Beach & Mağaza"
-  );
-
-  const halOzet = sirketOzeti(
-    hal?.id,
-    "HAL",
-    "Hal Komisyon & Soğuk Hava"
-  );
-
-  const grupGelir = beachOzet.gelir + halOzet.gelir;
-  const grupMaliyet = beachOzet.maliyet + halOzet.maliyet;
-  const grupNet = grupGelir - grupMaliyet;
-  const grupKarda = grupNet >= 0;
-
-  const donemAdi =
-    donem === "bugun"
-      ? "Bugün"
-      : donem === "ay"
-      ? "Bu Ay"
-      : donem === "yil"
-      ? "Bu Yıl"
-      : donem === "tumu"
-      ? "Tüm Zamanlar"
-      : "Özel Tarih";
-
-  const bugun = tarihInputValue(simdi);
-  const ayBasi = tarihInputValue(
-    new Date(simdi.getFullYear(), simdi.getMonth(), 1)
-  );
+  const MASK = "•••••••• ₺";
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-7xl px-6 py-10">
-        {/* BAŞLIK */}
-        <div className="mb-8">
-          <p className="mb-3 text-sm font-semibold uppercase tracking-[0.25em] text-emerald-400">
-            Şirket Yönetim Sistemi
+    <>
+      {/* RAKAM GİZLE / GÖSTER BUTONU */}
+      <div className="mb-6 flex justify-end">
+        <button
+          onClick={() => setGoster(!goster)}
+          className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-2.5 font-bold text-slate-200 transition hover:bg-slate-800"
+        >
+          {goster ? "🙈 Rakamları Gizle" : "👁️ Rakamları Göster"}
+        </button>
+      </div>
+
+      {/* GRUP TOPLAMLARI */}
+      <div className="grid gap-5 md:grid-cols-3">
+        <div className="rounded-3xl border border-emerald-900/50 bg-emerald-950/20 p-7">
+          <p className="text-sm font-bold uppercase tracking-wider text-slate-400">
+            Toplam Gelir
           </p>
+          <p className="mt-3 text-3xl font-black text-emerald-400 md:text-4xl">
+            {goster ? money(grupGelir) : MASK}
+          </p>
+          <p className="mt-3 text-sm text-slate-500">Satış + Verilen Hizmet</p>
+        </div>
 
-          <h1 className="text-4xl font-black tracking-tight md:text-5xl">
-            Grup Genel Görünümü
-          </h1>
-
-          <p className="mt-3 text-slate-400">
-            Beach & Mağaza ile Hal Komisyon & Soğuk Hava şirketlerinin birleşik
-            finansal görünümü.
+        <div className="rounded-3xl border border-orange-900/50 bg-orange-950/20 p-7">
+          <p className="text-sm font-bold uppercase tracking-wider text-slate-400">
+            Toplam Maliyet / Gider
+          </p>
+          <p className="mt-3 text-3xl font-black text-orange-400 md:text-4xl">
+            {goster ? money(grupMaliyet) : MASK}
+          </p>
+          <p className="mt-3 text-sm text-slate-500">
+            Alış + Alınan Hizmet + Gider
           </p>
         </div>
 
-        {/* DÖNEM FİLTRELERİ */}
-        <div className="mb-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/?donem=bugun"
-              className={`rounded-xl px-4 py-2 font-bold transition ${
-                donem === "bugun"
-                  ? "bg-cyan-500 text-slate-950"
-                  : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              Bugün
-            </Link>
+        <div
+          className={`rounded-3xl border p-7 ${
+            grupKarda
+              ? "border-emerald-700 bg-emerald-950/30"
+              : "border-red-700 bg-red-950/30"
+          }`}
+        >
+          <p className="text-sm font-bold uppercase tracking-wider text-slate-400">
+            Grup Net Kâr / Zarar
+          </p>
+          <p
+            className={`mt-3 text-3xl font-black md:text-4xl ${
+              grupKarda ? "text-emerald-400" : "text-red-400"
+            }`}
+          >
+            {goster ? money(grupNet) : MASK}
+          </p>
+          <div
+            className={`mt-4 inline-flex rounded-full px-4 py-2 text-sm font-black ${
+              grupKarda
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "bg-red-500/15 text-red-400"
+            }`}
+          >
+            {grupKarda ? "KÂR" : "ZARAR"}
+          </div>
+        </div>
+      </div>
 
-            <Link
-              href="/?donem=ay"
-              className={`rounded-xl px-4 py-2 font-bold transition ${
-                donem === "ay"
-                  ? "bg-cyan-500 text-slate-950"
-                  : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              Bu Ay
-            </Link>
-
-            <Link
-              href="/?donem=yil"
-              className={`rounded-xl px-4 py-2 font-bold transition ${
-                donem === "yil"
-                  ? "bg-cyan-500 text-slate-950"
-                  : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              Bu Yıl
-            </Link>
-
-            <Link
-              href="/?donem=tumu"
-              className={`rounded-xl px-4 py-2 font-bold transition ${
-                donem === "tumu"
-                  ? "bg-cyan-500 text-slate-950"
-                  : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              Tümü
-            </Link>
+      {/* ŞİRKET ÖZETLERİ */}
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        {/* BEACH */}
+        <div className="overflow-hidden rounded-3xl border border-cyan-900/50 bg-slate-900">
+          <div className="border-b border-slate-800 p-6">
+            <p className="text-sm font-bold uppercase tracking-wider text-cyan-400">
+              Şirket 01
+            </p>
+            <h2 className="mt-2 text-2xl font-black">Beach & Mağaza</h2>
           </div>
 
-          <form
-            method="GET"
-            className="mt-5 flex flex-col gap-3 md:flex-row md:items-end"
-          >
-            <input type="hidden" name="donem" value="ozel" />
-
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-400">
-                Başlangıç
-              </label>
-
-              <input
-                type="date"
-                name="baslangic"
-                defaultValue={params.baslangic ?? ayBasi}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-              />
+          <div className="grid grid-cols-2 gap-px bg-slate-800">
+            <div className="bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Gelir</p>
+              <p className="mt-2 text-xl font-black text-emerald-400">
+                {goster ? money(beachOzet.gelir) : MASK}
+              </p>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-400">
-                Bitiş
-              </label>
-
-              <input
-                type="date"
-                name="bitis"
-                defaultValue={params.bitis ?? bugun}
-                className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white"
-              />
+            <div className="bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Maliyet / Gider</p>
+              <p className="mt-2 text-xl font-black text-orange-400">
+                {goster ? money(beachOzet.maliyet) : MASK}
+              </p>
             </div>
+          </div>
 
-            <button
-              type="submit"
-              className="rounded-xl bg-white px-5 py-3 font-black text-slate-950 hover:bg-slate-200"
+          <div className="p-6">
+            <p className="text-sm text-slate-400">Net Kâr / Zarar</p>
+            <p
+              className={`mt-2 text-3xl font-black ${
+                beachOzet.net >= 0 ? "text-emerald-400" : "text-red-400"
+              }`}
             >
-              Tarihi Uygula
-            </button>
-          </form>
+              {goster ? money(beachOzet.net) : MASK}
+            </p>
+
+            <div className="mt-5 grid gap-2 text-sm text-slate-400">
+              <div className="flex justify-between">
+                <span>Satış</span>
+                <span>{goster ? money(beachOzet.satis) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Verilen Hizmet</span>
+                <span>{goster ? money(beachOzet.verilenHizmet) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Alış</span>
+                <span>{goster ? money(beachOzet.alis) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Alınan Hizmet</span>
+                <span>{goster ? money(beachOzet.alinanHizmet) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Giderler</span>
+                <span>{goster ? money(beachOzet.gider) : MASK}</span>
+              </div>
+            </div>
+
+            <Link
+              href="/beach"
+              className="mt-6 block rounded-xl bg-cyan-500 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-cyan-400"
+            >
+              Beach'e Gir →
+            </Link>
+          </div>
         </div>
 
-        {/* DÖNEM */}
-        <div className="mb-5">
-          <span className="rounded-full bg-slate-800 px-4 py-2 text-sm font-bold text-slate-300">
-            Gösterilen dönem: {donemAdi}
-          </span>
-        </div>
+        {/* HAL */}
+        <div className="overflow-hidden rounded-3xl border border-emerald-900/50 bg-slate-900">
+          <div className="border-b border-slate-800 p-6">
+            <p className="text-sm font-bold uppercase tracking-wider text-emerald-400">
+              Şirket 02
+            </p>
+            <h2 className="mt-2 text-2xl font-black">
+              Hal Komisyon & Soğuk Hava
+            </h2>
+          </div>
 
-        {/* FİNANSAL GÖRÜNÜM (MASKELİ & GİZLE/GÖSTER BUTONLU) */}
-        <FinansGorumunu
-          grupGelir={grupGelir}
-          grupMaliyet={grupMaliyet}
-          grupNet={grupNet}
-          grupKarda={grupKarda}
-          beachOzet={beachOzet}
-          halOzet={halOzet}
-          money={money}
-        />
+          <div className="grid grid-cols-2 gap-px bg-slate-800">
+            <div className="bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Gelir</p>
+              <p className="mt-2 text-xl font-black text-emerald-400">
+                {goster ? money(halOzet.gelir) : MASK}
+              </p>
+            </div>
+
+            <div className="bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Maliyet / Gider</p>
+              <p className="mt-2 text-xl font-black text-orange-400">
+                {goster ? money(halOzet.maliyet) : MASK}
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <p className="text-sm text-slate-400">Net Kâr / Zarar</p>
+            <p
+              className={`mt-2 text-3xl font-black ${
+                halOzet.net >= 0 ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {goster ? money(halOzet.net) : MASK}
+            </p>
+
+            <div className="mt-5 grid gap-2 text-sm text-slate-400">
+              <div className="flex justify-between">
+                <span>Satış</span>
+                <span>{goster ? money(halOzet.satis) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Verilen Hizmet</span>
+                <span>{goster ? money(halOzet.verilenHizmet) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Alış</span>
+                <span>{goster ? money(halOzet.alis) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Alınan Hizmet</span>
+                <span>{goster ? money(halOzet.alinanHizmet) : MASK}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Giderler</span>
+                <span>{goster ? money(halOzet.gider) : MASK}</span>
+              </div>
+            </div>
+
+            <Link
+              href="/hal"
+              className="mt-6 block rounded-xl bg-emerald-500 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-emerald-400"
+            >
+              HAL'e Gir →
+            </Link>
+          </div>
+        </div>
       </div>
-    </main>
+
+      {/* HESAP MANTIĞI */}
+      <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900/60 p-6">
+        <p className="font-black text-slate-300">Grup Kâr / Zarar Hesabı</p>
+        <p className="mt-2 text-sm leading-6 text-slate-400">
+          Toplam Gelir = Satış + Verilen Hizmet
+          <br />
+          Toplam Maliyet = Alış + Alınan Hizmet + Giderler
+          <br />
+          Net Kâr / Zarar = Toplam Gelir − Toplam Maliyet
+        </p>
+
+        <p
+          className={`mt-4 text-xl font-black ${
+            grupKarda ? "text-emerald-400" : "text-red-400"
+          }`}
+        >
+          Grup sonucu: {grupKarda ? "KÂR" : "ZARAR"}{" "}
+          {goster ? money(grupNet) : MASK}
+        </p>
+      </div>
+    </>
   );
 }
