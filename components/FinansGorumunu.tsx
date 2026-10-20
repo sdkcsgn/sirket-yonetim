@@ -17,10 +17,10 @@ type SirketOzet = {
 };
 
 type FinansGorumunuProps = {
-  grupGelir: number;
-  grupMaliyet: number;
-  grupNet: number;
-  grupKarda: boolean;
+  grupGelir?: number;
+  grupMaliyet?: number;
+  grupNet?: number;
+  grupKarda?: boolean;
   beachOzet?: SirketOzet;
   halOzet?: SirketOzet;
   userRol?: string;
@@ -43,22 +43,22 @@ export default function FinansGorumunu({
   grupKarda = true,
   beachOzet,
   halOzet,
-  userRol = "HAL",
+  userRol = "ADMIN", // Varsayılan yetki kısıtlamasını kaldırmak için ADMIN olarak güncellendi
 }: FinansGorumunuProps) {
   const [goster, setGoster] = useState(false);
 
-  // HAL ve GORUNTULEME rollerindeki kullanıcılar Kâr/Zarar ve Genel Toplamları GÖREMEZ
-  const karZararGorebilir =
-    userRol === "Yonetici" || userRol === "ADMIN" || userRol === "BEACH";
+  // Rol Yetki Kuralları
+  const tamErisim = userRol === "ADMIN" || userRol === "Yonetici";
+  const beachGorebilir = tamErisim || userRol === "BEACH";
+  const halGorebilir = tamErisim || userRol === "HAL";
 
   const MASK = "•••••••• ₺";
-
   const beachNet = beachOzet?.net ?? 0;
 
   return (
     <>
-      {/* RAKAM GİZLE / GÖSTER BUTONU */}
-      {karZararGorebilir && (
+      {/* RAKAM GİZLE / GÖSTER BUTONU (Sadece Yöneticiler Görür) */}
+      {tamErisim && (
         <div className="mb-6 flex justify-end">
           <button
             onClick={() => setGoster(!goster)}
@@ -69,8 +69,8 @@ export default function FinansGorumunu({
         </div>
       )}
 
-      {/* GRUP TOPLAMLARI */}
-      {karZararGorebilir ? (
+      {/* GRUP TOPLAMLARI (Sadece Yöneticiler Görür) */}
+      {tamErisim ? (
         <div className="grid gap-5 md:grid-cols-3">
           <div className="rounded-3xl border border-emerald-900/50 bg-emerald-950/20 p-7">
             <p className="text-sm font-bold uppercase tracking-wider text-slate-400">
@@ -128,10 +128,10 @@ export default function FinansGorumunu({
         </div>
       )}
 
-      {/* ŞİRKET ÖZETLERİ */}
+      {/* ŞİRKET MODÜL KARTLARI */}
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        {/* BEACH */}
-        {karZararGorebilir && (
+        {/* BEACH KARTI */}
+        {beachGorebilir && (
           <div className="overflow-hidden rounded-3xl border border-cyan-900/50 bg-slate-900">
             <div className="border-b border-slate-800 p-6">
               <p className="text-sm font-bold uppercase tracking-wider text-cyan-400">
@@ -140,66 +140,74 @@ export default function FinansGorumunu({
               <h2 className="mt-2 text-2xl font-black">Beach & Mağaza</h2>
             </div>
 
-            <div className="grid grid-cols-2 gap-px bg-slate-800">
-              <div className="bg-slate-900 p-5">
-                <p className="text-sm text-slate-400">Gelir</p>
-                <p className="mt-2 text-xl font-black text-emerald-400">
-                  {goster ? money(beachOzet?.gelir) : MASK}
-                </p>
-              </div>
+            {tamErisim && (
+              <div className="grid grid-cols-2 gap-px bg-slate-800">
+                <div className="bg-slate-900 p-5">
+                  <p className="text-sm text-slate-400">Gelir</p>
+                  <p className="mt-2 text-xl font-black text-emerald-400">
+                    {goster ? money(beachOzet?.gelir) : MASK}
+                  </p>
+                </div>
 
-              <div className="bg-slate-900 p-5">
-                <p className="text-sm text-slate-400">Maliyet / Gider</p>
-                <p className="mt-2 text-xl font-black text-orange-400">
-                  {goster ? money(beachOzet?.maliyet) : MASK}
-                </p>
+                <div className="bg-slate-900 p-5">
+                  <p className="text-sm text-slate-400">Maliyet / Gider</p>
+                  <p className="mt-2 text-xl font-black text-orange-400">
+                    {goster ? money(beachOzet?.maliyet) : MASK}
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="p-6">
-              <p className="text-sm text-slate-400">Net Kâr / Zarar</p>
-              <p
-                className={`mt-2 text-3xl font-black ${
-                  beachNet >= 0 ? "text-emerald-400" : "text-red-400"
-                }`}
-              >
-                {goster ? money(beachNet) : MASK}
-              </p>
+              {tamErisim && (
+                <>
+                  <p className="text-sm text-slate-400">Net Kâr / Zarar</p>
+                  <p
+                    className={`mt-2 text-3xl font-black ${
+                      beachNet >= 0 ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    {goster ? money(beachNet) : MASK}
+                  </p>
+                </>
+              )}
 
               <Link
                 href="/beach"
                 className="mt-6 block rounded-xl bg-cyan-500 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-cyan-400"
               >
-                Beach'e Gir →
+                Beach Paneline Gir →
               </Link>
             </div>
           </div>
         )}
 
-        {/* HAL PANELİ GİRİŞ KARTI */}
-        <div className="overflow-hidden rounded-3xl border border-emerald-900/50 bg-slate-900">
-          <div className="border-b border-slate-800 p-6">
-            <p className="text-sm font-bold uppercase tracking-wider text-emerald-400">
-              Şirket 02
-            </p>
-            <h2 className="mt-2 text-2xl font-black">
-              Hal Komisyon & Soğuk Hava
-            </h2>
-          </div>
+        {/* HAL KARTI */}
+        {halGorebilir && (
+          <div className="overflow-hidden rounded-3xl border border-emerald-900/50 bg-slate-900">
+            <div className="border-b border-slate-800 p-6">
+              <p className="text-sm font-bold uppercase tracking-wider text-emerald-400">
+                Şirket 02
+              </p>
+              <h2 className="mt-2 text-2xl font-black">
+                Hal Komisyon & Soğuk Hava
+              </h2>
+            </div>
 
-          <div className="p-6">
-            <p className="text-sm text-slate-400">
-              Hal işlemlerinizi yönetmek, fatura ve cari verileri girmek veya silmek için panele geçiş yapabilirsiniz.
-            </p>
+            <div className="p-6">
+              <p className="text-sm text-slate-400">
+                Hal işlemlerinizi yönetmek, fatura ve cari verileri girmek veya silmek için panele geçiş yapabilirsiniz.
+              </p>
 
-            <Link
-              href="/hal"
-              className="mt-6 block rounded-xl bg-emerald-500 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-emerald-400"
-            >
-              HAL Paneline Gir →
-            </Link>
+              <Link
+                href="/hal"
+                className="mt-6 block rounded-xl bg-emerald-500 px-5 py-3 text-center font-black text-slate-950 transition hover:bg-emerald-400"
+              >
+                HAL Paneline Gir →
+              </Link>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   );

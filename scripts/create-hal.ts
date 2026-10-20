@@ -1,15 +1,13 @@
-const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcryptjs");
-
-const prisma = new PrismaClient();
+import { prisma } from "../lib/prisma";
+import bcrypt from "bcryptjs";
 
 async function main() {
-  const SIFRE = "Hal2026!"; 
+  const SIFRE = "Hal2026!";
   const kullaniciAdi = "HAL";
 
   const sifreHash = await bcrypt.hash(SIFRE, 12);
 
-  const kullanici = await prisma.kullanici.upsert({
+  const kullanici = await (prisma as any).kullanici.upsert({
     where: { kullaniciAdi },
     update: {
       sifreHash,
@@ -33,10 +31,10 @@ async function main() {
 }
 
 main()
-  .catch((e: any) => {
+  .catch((e) => {
     console.error("Hata oluştu:", e);
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await (prisma as any).$disconnect();
   });
