@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
 
 type SirketOzet = {
   kod: string;
@@ -44,13 +43,11 @@ export default function FinansGorumunu({
   grupKarda = true,
   beachOzet,
   halOzet,
-  userRol: propUserRol,
+  userRol = "ADMIN",
 }: FinansGorumunuProps) {
-  const { data: session } = useSession();
   const [goster, setGoster] = useState(false);
 
-  const rawRol = String((session?.user as any)?.rol || propUserRol || "").toUpperCase();
-  
+  const rawRol = String(userRol || "ADMIN").toUpperCase();
   const isKisitliRol = rawRol === "HAL" || rawRol === "BEACH";
   const tamErisim = !isKisitliRol || rawRol.includes("ADMIN") || rawRol.includes("YONETICI");
 

@@ -1,8 +1,18 @@
-"use client";
-
+import { auth } from "@/auth";
 import FinansGorumunu from "@/components/FinansGorumunu";
 
-export default function Home() {
+export default async function Home() {
+  let userRol = "ADMIN";
+
+  try {
+    const session = await auth();
+    if (session?.user) {
+      userRol = (session.user as any).rol || "ADMIN";
+    }
+  } catch (error) {
+    console.error("Session error:", error);
+  }
+
   const grupGelir = 0;
   const grupMaliyet = 0;
   const grupNet = 0;
@@ -57,6 +67,7 @@ export default function Home() {
           grupKarda={grupKarda}
           beachOzet={beachOzet}
           halOzet={halOzet}
+          userRol={userRol}
         />
       </div>
     </main>
