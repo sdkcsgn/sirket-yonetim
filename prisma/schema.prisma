@@ -69,6 +69,7 @@ model Cari {
   finansHareketleri FinansHareket[]
   giderler          Gider[]
   odemeler          YaklasanOdeme[]
+  stokHareketleri   StokHareket[]
 
   @@unique([sirketId, atlasKodu])
   @@index([sirketId, tip])
@@ -238,8 +239,6 @@ model Cek {
   ciroCariIslendi Boolean      @default(false)
   paraBirimi      ParaBirimi   @default(TRY)
   atlasAktarimRef String?
-  /// *
-  ///    * Atlas aktarım bilgileri
   atlasKayitNo    String?
   atlasRef        String?
   bankaHesabi     FinansHesap? @relation(fields: [bankaHesabiId], references: [id])
@@ -280,17 +279,25 @@ model Stok {
 }
 
 model StokHareket {
-  id        Int      @id @default(autoincrement())
-  stokId    Int
-  tarih     DateTime
-  giris     Decimal  @default(0) @db.Decimal(18, 3)
-  cikis     Decimal  @default(0) @db.Decimal(18, 3)
-  aciklama  String?
-  belgeNo   String?
-  createdAt DateTime @default(now())
-  stok      Stok     @relation(fields: [stokId], references: [id], onDelete: Cascade)
+  id          Int      @id @default(autoincrement())
+  stokId      Int
+  cariId      Int?
+  tarih       DateTime @default(now())
+  giris       Decimal  @default(0) @db.Decimal(18, 3)
+  cikis       Decimal  @default(0) @db.Decimal(18, 3)
+  dara        Decimal  @default(0) @db.Decimal(18, 3)
+  birimFiyat  Decimal  @default(0) @db.Decimal(18, 2)
+  toplamTutar Decimal  @default(0) @db.Decimal(18, 2)
+  odaNo       String?
+  aciklama    String?
+  belgeNo     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  stok        Stok     @relation(fields: [stokId], references: [id], onDelete: Cascade)
+  cari        Cari?    @relation(fields: [cariId], references: [id], onDelete: SetNull)
 
   @@index([stokId, tarih])
+  @@index([cariId])
 }
 
 model YaklasanOdeme {
@@ -310,21 +317,21 @@ model YaklasanOdeme {
 }
 
 model FinansHesap {
-  id         Int             @id @default(autoincrement())
+  id         Int               @id @default(autoincrement())
   sirketId   Int
   ad         String
   tip        FinansHesapTipi
   bankaAdi   String?
   iban       String?
   hesapNo    String?
-  aktif      Boolean         @default(true)
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
-  paraBirimi ParaBirimi      @default(TRY)
+  aktif      Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  paraBirimi ParaBirimi        @default(TRY)
   cekler     Cek[]
   faturalar  Fatura[]
   hareketler FinansHareket[]
-  sirket     Sirket          @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  sirket     Sirket            @relation(fields: [sirketId], references: [id], onDelete: Cascade)
   giderler   Gider[]
   krediler   Kredi[]
 
