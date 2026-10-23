@@ -491,11 +491,11 @@ export default async function StokPage({
                             </a>
 
                             <a
-                              href={`/hal/yonetim/stok/${stok.id}`}
-                              className="rounded-lg border border-amber-700 px-3 py-2 text-sm font-bold text-amber-400 transition hover:bg-amber-950/30"
-                            >
-                              Düzenle
-                            </a>
+  href={`/hal/yonetim/stok/${stok.id}`}
+  className="rounded-lg border border-amber-700 px-3 py-2 text-sm font-bold text-amber-400 transition hover:bg-amber-950/30"
+>
+  Düzenle
+</a>
 
                             <a
                               href={`/hal/stok/${stok.id}/hareket?tip=GIRIS`}
