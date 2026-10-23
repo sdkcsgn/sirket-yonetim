@@ -1,408 +1,296 @@
-import { prisma } from "@/lib/prisma";
-import { notFound, redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+'use client';
 
-type Props = {
-  params: Promise<{
-    id: string;
-  }>;
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-  searchParams: Promise<{
-    tip?: string;
-  }>;
-};
+export default function StokHareketPage({ params }: { params: { id: string } }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tip = searchParams.get('tip') || 'GIRIS';
 
-function parseMiktar(value: FormDataEntryValue | null) {
-  const raw = String(value ?? "")
-    .trim()
-    .replace(/\./g, "")
-    .replace(",", ".");
+  const [cariler, setCariler] = useState<any[]>([]);
+  const [hareketler, setHareketler] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
 
-  const miktar = Number(raw);
+  // Form Verileri
+  const [formData, setFormData] = useState({
+    cariId: '',
+    yeniMustahsilUnvan: '',
+    giris: '',
+    dara: '',
+    birimFiyat: '',
+    odaNo: '',
+    belgeNo: '',
+    aciklama: '',
+  });
 
-  if (!Number.isFinite(miktar) || miktar <= 0) {
-    throw new Error("Geçerli bir miktar giriniz.");
-  }
+  useEffect(() => {
+    fetchCariler();
+    fetchHareketler();
+  }, [params.id]);
 
-  return miktar;
-}
+  const fetchCariler = async () => {
+    const res = await fetch('/api/hal/cariler?tip=URETICI');
+    if (res.ok) {
+      const data = await res.json();
+      setCariler(data);
+    }
+  };
 
-async function stokHareketKaydet(formData: FormData) {
-  "use server";
+  const fetchHareketler = async () => {
+    const res = await fetch(`/api/hal/stok/${params.id}/hareket`);
+    if (res.ok) {
+      const data = await res.json();
+      setHareketler(data);
+    }
+  };
 
-  const stokId = Number(formData.get("stokId"));
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
-  const tip = String(
-    formData.get("hareketTipi") ?? ""
-  );
+    const method = editingId ? 'PUT' : 'POST';
+    const body = editingId
+      ? { ...formData, id: editingId, stokId: parseInt(params.id) }
+      : { ...formData, stokId: parseInt(params.id), tip };
 
-  const miktar = parseMiktar(
-    formData.get("miktar")
-  );
-
-  const belgeNo = String(
-    formData.get("belgeNo") ?? ""
-  ).trim();
-
-  const aciklama = String(
-    formData.get("aciklama") ?? ""
-  ).trim();
-
-  if (
-    !Number.isInteger(stokId) ||
-    stokId <= 0
-  ) {
-    throw new Error("Geçersiz ürün.");
-  }
-
-  if (
-    tip !== "GIRIS" &&
-    tip !== "CIKIS"
-  ) {
-    throw new Error(
-      "Geçersiz stok hareketi."
-    );
-  }
-
-  const stok =
-    await prisma.stok.findUnique({
-      where: {
-        id: stokId,
-      },
-
-      include: {
-        sirket: true,
-      },
+    const res = await fetch(`/api/hal/stok/${params.id}/hareket`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     });
 
-  if (
-    !stok ||
-    stok.sirket.kod !== "HAL"
-  ) {
-    throw new Error(
-      "Ürün bulunamadı."
-    );
-  }
+    setLoading(false);
+    if (res.ok) {
+      resetForm();
+      fetchHareketler();
+      router.refresh();
+    } else {
+      alert('İşlem başarısız oldu.');
+    }
+  };
 
-  const mevcutMiktar =
-    Number(stok.mevcutMiktar);
+  const handleEdit = (item: any) => {
+    setEditingId(item.id);
+    setFormData({
+      cariId: item.cariId ? String(item.cariId) : '',
+      yeniMustahsilUnvan: '',
+      giris: String(item.giris),
+      dara: String(item.dara || ''),
+      birimFiyat: String(item.birimFiyat || ''),
+      odaNo: item.odaNo || '',
+      belgeNo: item.belgeNo || '',
+      aciklama: item.aciklama || '',
+    });
+  };
 
-  if (
-    tip === "CIKIS" &&
-    miktar > mevcutMiktar
-  ) {
-    throw new Error(
-      `Yetersiz stok. Mevcut stok: ${mevcutMiktar} ${stok.birim}`
-    );
-  }
+  const handleDelete = async (id: number) => {
+    if (!confirm('Bu stok hareketini silmek istediğinize emin misiniz? Cari ve stok bakiyesi de düzelecektir.')) return;
 
-  const yeniMiktar =
-    tip === "GIRIS"
-      ? mevcutMiktar + miktar
-      : mevcutMiktar - miktar;
-
-  await prisma.$transaction([
-    prisma.stok.update({
-      where: {
-        id: stok.id,
-      },
-
-      data: {
-        mevcutMiktar: yeniMiktar,
-      },
-    }),
-
-    prisma.stokHareket.create({
-      data: {
-        stokId: stok.id,
-
-        tarih: new Date(),
-
-        giris:
-          tip === "GIRIS"
-            ? miktar
-            : 0,
-
-        cikis:
-          tip === "CIKIS"
-            ? miktar
-            : 0,
-
-        belgeNo:
-          belgeNo || null,
-
-        aciklama:
-          aciklama ||
-          (tip === "GIRIS"
-            ? "Manuel stok girişi"
-            : "Manuel stok çıkışı"),
-      },
-    }),
-  ]);
-
-  revalidatePath(
-    "/hal/yonetim/stok"
-  );
-
-  revalidatePath(
-    `/hal/yonetim/stok/${stok.id}`
-  );
-
-  revalidatePath(
-    "/hal/faturalar/yeni"
-  );
-
-  revalidatePath("/hal");
-
-  redirect(
-    `/hal/yonetim/stok/${stok.id}`
-  );
-}
-
-export default async function StokHareketPage({
-  params,
-  searchParams,
-}: Props) {
-  const { id } = await params;
-
-  const query =
-    await searchParams;
-
-  const stokId =
-    Number(id);
-
-  if (
-    !Number.isInteger(stokId) ||
-    stokId <= 0
-  ) {
-    notFound();
-  }
-
-  const hareketTipi:
-    | "GIRIS"
-    | "CIKIS" =
-    query.tip === "CIKIS"
-      ? "CIKIS"
-      : "GIRIS";
-
-  const stok =
-    await prisma.stok.findUnique({
-      where: {
-        id: stokId,
-      },
-
-      include: {
-        sirket: true,
-      },
+    const res = await fetch(`/api/hal/stok/${params.id}/hareket?id=${id}`, {
+      method: 'DELETE',
     });
 
-  if (
-    !stok ||
-    stok.sirket.kod !== "HAL"
-  ) {
-    notFound();
-  }
+    if (res.ok) {
+      fetchHareketler();
+      router.refresh();
+    } else {
+      alert('Silme işlemi başarısız.');
+    }
+  };
 
-  const inputClass =
-    "w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500";
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({
+      cariId: '',
+      yeniMustahsilUnvan: '',
+      giris: '',
+      dara: '',
+      birimFiyat: '',
+      odaNo: '',
+      belgeNo: '',
+      aciklama: '',
+    });
+  };
 
-  const mevcutMiktar =
-    Number(stok.mevcutMiktar);
-
-  const minimumStok =
-    Number(stok.minimumStok);
+  const netKilo = (parseFloat(formData.giris) || 0) - (parseFloat(formData.dara) || 0);
+  const toplamTutar = netKilo * (parseFloat(formData.birimFiyat) || 0);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
-      <div className="mx-auto max-w-3xl px-6 py-10">
+    <div className="p-6 max-w-6xl mx-auto space-y-8">
+      {/* FORM ALANI */}
+      <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+        <h2 className="text-xl font-bold text-white mb-6">
+          {editingId ? 'Stok Hareketini Düzenle' : `${tip === 'GIRIS' ? 'Stok Giriş' : 'Stok Çıkış'} Formu`}
+        </h2>
 
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Müstahsil Seçimi */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Müstahsil / Cari</label>
+              <select
+                value={formData.cariId}
+                onChange={(e) => setFormData({ ...formData, cariId: e.target.value, yeniMustahsilUnvan: '' })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+              >
+                <option value="">-- Cari Seçin --</option>
+                {cariler.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.unvan}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
-              Ürün & Stok
-            </p>
+            {/* Yeni Müstahsil Unvanı (Cari Yoksa) */}
+            {!formData.cariId && (
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">VEYA Yeni Müstahsil Unvanı</label>
+                <input
+                  type="text"
+                  placeholder="Örn: Ahmet Yılmaz"
+                  value={formData.yeniMustahsilUnvan}
+                  onChange={(e) => setFormData({ ...formData, yeniMustahsilUnvan: e.target.value })}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+                />
+              </div>
+            )}
 
-            <h1 className="mt-2 text-4xl font-black">
-              {hareketTipi ===
-              "GIRIS"
-                ? "Stok Giriş"
-                : "Stok Çıkış"}
-            </h1>
+            {/* Brüt Miktar */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Brüt Miktar (KG)</label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={formData.giris}
+                onChange={(e) => setFormData({ ...formData, giris: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+              />
+            </div>
 
-            <p className="mt-2 text-slate-400">
-              {stok.kod} -{" "}
-              {stok.ad}
-            </p>
+            {/* Dara */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Dara (KG)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.dara}
+                onChange={(e) => setFormData({ ...formData, dara: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+              />
+            </div>
+
+            {/* Birim Fiyat */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Birim Fiyat (TL/KG)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.birimFiyat}
+                onChange={(e) => setFormData({ ...formData, birimFiyat: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+              />
+            </div>
+
+            {/* Depo / Oda No */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Depo / Oda No</label>
+              <input
+                type="text"
+                placeholder="Örn: Soğuk Hava Deposu Oda 3"
+                value={formData.odaNo}
+                onChange={(e) => setFormData({ ...formData, odaNo: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+              />
+            </div>
+
+            {/* Belge No */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Belge / İrsaliye No</label>
+              <input
+                type="text"
+                value={formData.belgeNo}
+                onChange={(e) => setFormData({ ...formData, belgeNo: e.target.value })}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg p-2.5 text-white"
+              />
+            </div>
           </div>
 
-         <a
-  href={`/hal/stok/${stok.id}`}
-  className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-900"
->
-  ← Stok Detayı
-</a>
-
-        </div>
-
-        <div className="mb-6 grid gap-4 md:grid-cols-2">
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-
-            <p className="text-sm text-slate-400">
-              Mevcut Stok
-            </p>
-
-            <p className="mt-2 text-3xl font-black">
-              {new Intl.NumberFormat(
-                "tr-TR",
-                {
-                  maximumFractionDigits: 3,
-                }
-              ).format(
-                mevcutMiktar
-              )}{" "}
-              {stok.birim}
-            </p>
-
+          {/* Hesaplanan Özet */}
+          <div className="bg-slate-800/50 p-4 rounded-lg flex justify-between items-center text-sm border border-slate-700/50">
+            <div>Net Kilo: <span className="font-bold text-emerald-400">{netKilo > 0 ? netKilo : 0} KG</span></div>
+            <div>Tahmini Tutar: <span className="font-bold text-emerald-400">{toplamTutar.toFixed(2)} TL</span></div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-
-            <p className="text-sm text-slate-400">
-              Minimum Stok
-            </p>
-
-            <p className="mt-2 text-3xl font-black text-amber-400">
-              {new Intl.NumberFormat(
-                "tr-TR",
-                {
-                  maximumFractionDigits: 3,
-                }
-              ).format(
-                minimumStok
-              )}{" "}
-              {stok.birim}
-            </p>
-
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-lg transition"
+            >
+              {loading ? 'Kaydediliyor...' : editingId ? 'Güncelle' : 'Stoğa Ekle'}
+            </button>
+            {editingId && (
+              <button
+                type="button"
+                onClick={resetForm}
+                className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-3 rounded-lg"
+              >
+                İptal
+              </button>
+            )}
           </div>
-
-        </div>
-
-        <form
-          action={stokHareketKaydet}
-          className="rounded-2xl border border-slate-800 bg-slate-900 p-6 md:p-8"
-        >
-
-          <input
-            type="hidden"
-            name="stokId"
-            value={stok.id}
-          />
-
-          <input
-            type="hidden"
-            name="hareketTipi"
-            value={hareketTipi}
-          />
-
-          <div>
-
-            <label className="mb-2 block text-sm font-semibold">
-              {hareketTipi ===
-              "GIRIS"
-                ? "Giriş Miktarı"
-                : "Çıkış Miktarı"}
-            </label>
-
-            <input
-              type="number"
-              name="miktar"
-              min="0.001"
-              step="0.001"
-              required
-              placeholder={`Örn: 10 ${stok.birim}`}
-              className={inputClass}
-            />
-
-          </div>
-
-          <div className="mt-6">
-
-            <label className="mb-2 block text-sm font-semibold">
-              Belge No
-            </label>
-
-            <input
-              name="belgeNo"
-              placeholder="Varsa belge / sayım no"
-              className={inputClass}
-            />
-
-          </div>
-
-          <div className="mt-6">
-
-            <label className="mb-2 block text-sm font-semibold">
-              Açıklama
-            </label>
-
-            <textarea
-              name="aciklama"
-              rows={4}
-              placeholder={
-                hareketTipi ===
-                "GIRIS"
-                  ? "Örn: Mal alımı, sayım fazlası, devir stoğu..."
-                  : "Örn: Fire, sayım düzeltmesi, kullanım..."
-              }
-              className={inputClass}
-            />
-
-          </div>
-
-          <div
-            className={
-              hareketTipi ===
-              "GIRIS"
-                ? "mt-6 rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-5"
-                : "mt-6 rounded-xl border border-red-900/60 bg-red-950/20 p-5"
-            }
-          >
-
-            <p className="font-bold">
-              {hareketTipi ===
-              "GIRIS"
-                ? "Stok artacaktır."
-                : "Stok azalacaktır."}
-            </p>
-
-            <p className="mt-2 text-sm text-slate-300">
-              İşlem stok hareket
-              geçmişine de
-              kaydedilecektir.
-            </p>
-
-          </div>
-
-          <button
-            type="submit"
-            className={
-              hareketTipi ===
-              "GIRIS"
-                ? "mt-6 w-full cursor-pointer rounded-xl bg-emerald-500 px-5 py-4 text-lg font-black text-slate-950 hover:bg-emerald-400"
-                : "mt-6 w-full cursor-pointer rounded-xl bg-red-500 px-5 py-4 text-lg font-black text-white hover:bg-red-400"
-            }
-          >
-            {hareketTipi ===
-              "GIRIS"
-                ? "Stoğa Ekle"
-                : "Stoktan Düş"}
-          </button>
-
         </form>
-
       </div>
-    </main>
+
+      {/* STOK HAREKETLERİ TABLOSU (DÜZENLE & SİL) */}
+      <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
+        <h3 className="text-lg font-bold text-white mb-4">Stok Hareket Geçmişi</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm text-slate-300">
+            <thead className="bg-slate-800 text-slate-400 uppercase text-xs">
+              <tr>
+                <th className="p-3">Tarih</th>
+                <th className="p-3">Müstahsil</th>
+                <th className="p-3">Giriş (Net)</th>
+                <th className="p-3">Fiyat</th>
+                <th className="p-3">Toplam</th>
+                <th className="p-3">Oda</th>
+                <th className="p-3 text-right">İşlemler</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {hareketler.map((h) => (
+                <tr key={h.id} className="hover:bg-slate-800/50">
+                  <td className="p-3">{new Date(h.tarih).toLocaleDateString('tr-TR')}</td>
+                  <td className="p-3">{h.cari?.unvan || '-'}</td>
+                  <td className="p-3 text-emerald-400 font-semibold">{h.giris} KG</td>
+                  <td className="p-3">{h.birimFiyat} TL</td>
+                  <td className="p-3 font-semibold">{h.toplamTutar} TL</td>
+                  <td className="p-3">{h.odaNo || '-'}</td>
+                  <td className="p-3 text-right space-x-2">
+                    <button
+                      onClick={() => handleEdit(h)}
+                      className="bg-blue-600/20 text-blue-400 hover:bg-blue-600/40 px-3 py-1 rounded text-xs"
+                    >
+                      Düzenle
+                    </button>
+                    <button
+                      onClick={() => handleDelete(h)}
+                      className="bg-rose-600/20 text-rose-400 hover:bg-rose-600/40 px-3 py-1 rounded text-xs"
+                    >
+                      Sil
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   );
 }
