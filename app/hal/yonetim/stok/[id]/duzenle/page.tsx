@@ -115,7 +115,7 @@ export default async function StokDuzenlePage({
     revalidatePath("/hal/faturalar/yeni");
     revalidatePath("/hal");
 
-    redirect("/hal/yonetim/stok");
+    redirect("/hal/stok");
   }
 
   const inputClass =
@@ -254,12 +254,12 @@ export default async function StokDuzenlePage({
             >
               Değişiklikleri Kaydet
             </button>
-            <a
-              href="/hal/yonetim/stok"
-              className="rounded-xl border border-slate-700 px-5 py-4 font-bold text-slate-300"
-            >
-              Vazgeç
-            </a>
+          <a
+  href="/hal/stok"
+  className="rounded-xl border border-slate-700 px-5 py-4 font-bold text-slate-300"
+>
+  Vazgeç
+</a>
           </div>
         </form>
       </div>
