@@ -50,7 +50,7 @@ export async function PUT(
         kod,
         kategori,
         birim,
-        minStok: minStok ? parseFloat(minStok) : 0,
+        minimumStok: minStok ? parseFloat(minStok) : 0,
       },
     });
 

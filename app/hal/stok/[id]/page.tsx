@@ -239,12 +239,49 @@ export default async function StokDetayPage({
           HAREKETİ SİL
         */
 
-        await tx.stokHareket.delete({
-          where: {
-            id:
-              hareket.id,
-          },
-        });
+       /*
+  CARİ BORCUNU GERİ AL
+
+  Yalnızca silinen stok girişine ait
+  STOK_ALIS cari hareketini sil.
+*/
+if (
+  giris > 0 &&
+  hareket.cariId &&
+  Number(hareket.toplamTutar) > 0
+) {
+  const cariHareket = await tx.cariHareket.findFirst({
+    where: {
+      cariId: hareket.cariId,
+      tip: "BORC",
+      islemTuru: "STOK_ALIS",
+      aciklama: `Stok alış girişi: ${hareket.stok.ad} - ${hareket.aciklama || ""}`,
+      belgeNo: hareket.belgeNo,
+      borc: Number(hareket.toplamTutar),
+      alacak: 0,
+    },
+    orderBy: {
+      id: "desc",
+    },
+  });
+
+  if (cariHareket) {
+    await tx.cariHareket.delete({
+      where: {
+        id: cariHareket.id,
+      },
+    });
+  }
+}
+
+/*
+  STOK HAREKETİNİ SİL
+*/
+await tx.stokHareket.delete({
+  where: {
+    id: hareket.id,
+  },
+});
       }
     );
 

@@ -1,12 +1,10 @@
+
 import { prisma } from "@/lib/prisma";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
 type Props = {
-  params: Promise<{
-    id: string;
-  }>;
-
+  params: Promise<{ id: string }>;
   searchParams: Promise<{
     tip?: string;
     error?: string;
@@ -20,183 +18,112 @@ function number(value: number) {
   }).format(value);
 }
 
-function parseNumber(
-  formData: FormData,
-  name: string
-) {
-  const raw = String(
-    formData.get(name) ?? ""
-  )
+function parseNumber(formData: FormData, name: string): number {
+  const raw = String(formData.get(name) ?? "")
     .trim()
     .replace(/\s/g, "");
 
-  if (!raw) {
-    return 0;
-  }
+  if (!raw) return 0;
 
   let normalized = raw;
 
-  if (
-    raw.includes(".") &&
-    raw.includes(",")
-  ) {
-    normalized = raw
-      .replace(/\./g, "")
-      .replace(",", ".");
+  if (raw.includes(".") && raw.includes(",")) {
+    normalized = raw.replace(/\./g, "").replace(",", ".");
   } else if (raw.includes(",")) {
-    normalized =
-      raw.replace(",", ".");
+    normalized = raw.replace(",", ".");
   }
 
-  const value =
-    Number(normalized);
-
-  return Number.isFinite(value)
-    ? value
-    : 0;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : 0;
 }
 
-function parseDate(
-  formData: FormData,
-  name: string
-) {
-  const raw = String(
-    formData.get(name) ?? ""
-  ).trim();
+function parseDate(formData: FormData, name: string): Date | null {
+  const raw = String(formData.get(name) ?? "").trim();
+  if (!raw) return null;
 
-  if (!raw) {
-    return null;
-  }
-
-  const value =
-    new Date(
-      `${raw}T12:00:00`
-    );
-
-  return Number.isNaN(
-    value.getTime()
-  )
-    ? null
-    : value;
+  const value = new Date(`${raw}T12:00:00`);
+  return Number.isNaN(value.getTime()) ? null : value;
 }
 
 export default async function StokHareketPage({
   params,
   searchParams,
 }: Props) {
-  const { id } =
-    await params;
+  const { id } = await params;
+  const query = await searchParams;
+  const stokId = Number(id);
 
-  const query =
-    await searchParams;
-
-  const stokId =
-    Number(id);
-
-  if (
-    !Number.isInteger(
-      stokId
-    ) ||
-    stokId <= 0
-  ) {
+  if (!Number.isInteger(stokId) || stokId <= 0) {
     notFound();
   }
 
-  const tip =
-    query.tip === "CIKIS"
-      ? "CIKIS"
-      : "GIRIS";
+  const tip = query.tip === "CIKIS" ? "CIKIS" : "GIRIS";
 
-  const sirket =
-    await prisma.sirket.findUnique({
-      where: {
-        kod: "HAL",
-      },
-    });
+  const sirket = await prisma.sirket.findUnique({
+    where: { kod: "HAL" },
+  });
 
   if (!sirket) {
     return (
       <main className="min-h-screen bg-slate-950 p-10 text-white">
-        Hal Komisyon & Soğuk Hava şirketi bulunamadı.
+        Hal Komisyon &amp; Soğuk Hava şirketi bulunamadı.
       </main>
     );
   }
 
-  const stok =
-    await prisma.stok.findFirst({
-      where: {
-        id: stokId,
-        sirketId:
-          sirket.id,
-      },
-    });
+  const stok = await prisma.stok.findFirst({
+    where: {
+      id: stokId,
+      sirketId: sirket.id,
+    },
+  });
 
   if (!stok) {
     notFound();
   }
 
-  /*
-    ==================================================
-    STOK HAREKETİ KAYDET
-    ==================================================
-  */
+  const cariler = await prisma.cari.findMany({
+    where: {
+      sirketId: sirket.id,
+      aktif: true,
+    },
+    select: {
+      id: true,
+      unvan: true,
+      tip: true,
+    },
+    orderBy: { unvan: "asc" },
+  });
 
-  async function hareketKaydet(
-    formData: FormData
-  ) {
+  async function hareketKaydet(formData: FormData) {
     "use server";
 
-    const sirket =
-      await prisma.sirket.findUnique({
-        where: {
-          kod: "HAL",
-        },
-      });
+    const sirket = await prisma.sirket.findUnique({
+      where: { kod: "HAL" },
+    });
 
     if (!sirket) {
-      throw new Error(
-        "Hal Komisyon & Soğuk Hava bulunamadı."
-      );
+      throw new Error("Hal Komisyon & Soğuk Hava bulunamadı.");
     }
 
-    const stok =
-      await prisma.stok.findFirst({
-        where: {
-          id: stokId,
-          sirketId:
-            sirket.id,
-        },
-      });
+    const stok = await prisma.stok.findFirst({
+      where: {
+        id: stokId,
+        sirketId: sirket.id,
+      },
+    });
 
     if (!stok) {
-      throw new Error(
-        "Stok bulunamadı."
-      );
+      throw new Error("Stok bulunamadı.");
     }
 
-    const hareketTipi =
-      String(
-        formData.get(
-          "tip"
-        ) ?? ""
-      );
+    const hareketTipi = String(formData.get("tip") ?? "");
 
-    if (
-      hareketTipi !==
-        "GIRIS" &&
-      hareketTipi !==
-        "CIKIS"
-    ) {
-      throw new Error(
-        "Geçersiz hareket türü."
-      );
+    if (hareketTipi !== "GIRIS" && hareketTipi !== "CIKIS") {
+      throw new Error("Geçersiz hareket türü.");
     }
 
-    const miktar =
-      parseNumber(
-        formData,
-        "miktar"
-      );
+    const miktar = parseNumber(formData, "miktar");
 
     if (miktar <= 0) {
       redirect(
@@ -206,11 +133,7 @@ export default async function StokHareketPage({
       );
     }
 
-    const tarih =
-      parseDate(
-        formData,
-        "tarih"
-      );
+    const tarih = parseDate(formData, "tarih");
 
     if (!tarih) {
       redirect(
@@ -221,482 +144,294 @@ export default async function StokHareketPage({
     }
 
     const belgeNo =
-      String(
-        formData.get(
-          "belgeNo"
-        ) ?? ""
-      ).trim() || null;
+      String(formData.get("belgeNo") ?? "").trim() || null;
 
     const aciklama =
-      String(
-        formData.get(
-          "aciklama"
-        ) ?? ""
-      ).trim() ||
-      (
-        hareketTipi ===
-        "GIRIS"
-          ? "Manuel stok girişi"
-          : "Manuel stok çıkışı"
-      );
+      String(formData.get("aciklama") ?? "").trim() ||
+      (hareketTipi === "GIRIS"
+        ? "Manuel stok girişi"
+        : "Manuel stok çıkışı");
 
-    /*
-      ÇIKIŞTA YETERSİZ STOK
-      KONTROLÜ
-    */
+    const cariIdRaw = String(formData.get("cariId") ?? "").trim();
+    const yeniCariUnvan = String(
+      formData.get("yeniCariUnvan") ?? ""
+    ).trim();
+
+    const birimFiyat = parseNumber(formData, "birimFiyat");
+
+    if (cariIdRaw && yeniCariUnvan) {
+      throw new Error(
+        "Mevcut cari seçin veya yeni cari adı girin; ikisini birlikte kullanmayın."
+      );
+    }
+
+    if (birimFiyat < 0) {
+      throw new Error("Birim fiyat negatif olamaz.");
+    }
 
     if (
-      hareketTipi ===
-        "CIKIS" &&
-      Number(
-        stok.mevcutMiktar
-      ) < miktar
+      (cariIdRaw || yeniCariUnvan) &&
+      hareketTipi !== "GIRIS"
+    ) {
+      throw new Error(
+        "Tedarikçi borçlandıran alış kaydı yalnızca stok girişinde yapılabilir."
+      );
+    }
+
+    if (
+      (cariIdRaw || yeniCariUnvan) &&
+      birimFiyat <= 0
+    ) {
+      throw new Error("Cari borcu için birim alış fiyatı giriniz.");
+    }
+
+    if (birimFiyat > 0 && !cariIdRaw && !yeniCariUnvan) {
+      throw new Error(
+        "Fiyat girdiğinizde mevcut cari seçin veya yeni tedarikçi adı yazın."
+      );
+    }
+
+    const toplamTutar = Number((miktar * birimFiyat).toFixed(2));
+
+    if (
+      hareketTipi === "CIKIS" &&
+      Number(stok.mevcutMiktar) < miktar
     ) {
       redirect(
         `/hal/stok/${stokId}/hareket?tip=CIKIS&error=${encodeURIComponent(
           `Yetersiz stok. Mevcut: ${number(
-            Number(
-              stok.mevcutMiktar
-            )
+            Number(stok.mevcutMiktar)
           )} ${stok.birim}`
         )}`
       );
     }
 
-    await prisma.$transaction(
-      async (tx) => {
-        /*
-          STOK MİKTARINI
-          GÜNCELLE
-        */
+    await prisma.$transaction(async (tx) => {
+      let cariId: number | null = null;
 
-        if (
-          hareketTipi ===
-          "GIRIS"
-        ) {
-          await tx.stok.update({
-            where: {
-              id:
-                stok.id,
-            },
+      if (yeniCariUnvan) {
+        const yeniCari = await tx.cari.create({
+          data: {
+            sirketId: sirket.id,
+            unvan: yeniCariUnvan,
+            tip: "SATICI",
+          },
+        });
 
-            data: {
-              mevcutMiktar: {
-                increment:
-                  miktar,
-              },
-            },
-          });
-        } else {
-          await tx.stok.update({
-            where: {
-              id:
-                stok.id,
-            },
+        cariId = yeniCari.id;
+      } else if (cariIdRaw) {
+        const secilenId = Number(cariIdRaw);
 
-            data: {
-              mevcutMiktar: {
-                decrement:
-                  miktar,
-              },
-            },
-          });
+        if (!Number.isInteger(secilenId) || secilenId <= 0) {
+          throw new Error("Geçersiz cari seçimi.");
         }
 
-        /*
-          STOK HAREKETİ
-          OLUŞTUR
-        */
+        const cari = await tx.cari.findFirst({
+          where: {
+            id: secilenId,
+            sirketId: sirket.id,
+            aktif: true,
+          },
+        });
 
-        await tx.stokHareket.create({
+        if (!cari) {
+          throw new Error("Seçilen cari bulunamadı.");
+        }
+
+        cariId = cari.id;
+      }
+
+      await tx.stok.update({
+        where: { id: stok.id },
+        data: {
+          mevcutMiktar:
+            hareketTipi === "GIRIS"
+              ? { increment: miktar }
+              : { decrement: miktar },
+        },
+      });
+
+      await tx.stokHareket.create({
+        data: {
+          stokId: stok.id,
+          tarih,
+          giris: hareketTipi === "GIRIS" ? miktar : 0,
+          cikis: hareketTipi === "CIKIS" ? miktar : 0,
+          aciklama,
+          belgeNo,
+          cariId,
+          birimFiyat,
+          toplamTutar,
+        },
+      });
+
+      if (
+        cariId &&
+        hareketTipi === "GIRIS" &&
+        toplamTutar > 0
+      ) {
+        await tx.cariHareket.create({
           data: {
-            stokId:
-              stok.id,
-
+            cariId,
             tarih,
-
-            giris:
-              hareketTipi ===
-              "GIRIS"
-                ? miktar
-                : 0,
-
-            cikis:
-              hareketTipi ===
-              "CIKIS"
-                ? miktar
-                : 0,
-
+            tip: "BORC",
+            aciklama: `Stok alış girişi: ${stok.ad} - ${aciklama}`,
             belgeNo,
-
-            aciklama,
+            borc: toplamTutar,
+            alacak: 0,
+            islemTuru: "STOK_ALIS",
           },
         });
       }
-    );
+    });
 
-    /*
-      SAYFALARI YENİLE
-    */
+    revalidatePath("/hal");
+    revalidatePath("/hal/stok");
+    revalidatePath(`/hal/stok/${stok.id}`);
+    revalidatePath(`/hal/stok/${stok.id}/hareket`);
+    revalidatePath("/hal/yonetim/stok");
 
-    revalidatePath(
-      "/hal"
-    );
-
-    revalidatePath(
-      "/hal/stok"
-    );
-
-    revalidatePath(
-      `/hal/stok/${stok.id}`
-    );
-
-    revalidatePath(
-      "/hal/yonetim/stok"
-    );
-
-    redirect(
-      `/hal/stok/${stok.id}`
-    );
+    redirect(`/hal/stok/${stok.id}`);
   }
 
-  const bugun =
-    new Date()
-      .toISOString()
-      .slice(0, 10);
-
   const inputClass =
-    "w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none transition focus:border-cyan-500";
-
-  const labelClass =
-    "mb-2 block text-sm font-bold text-slate-300";
-
-  const giris =
-    tip === "GIRIS";
+    "w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500";
 
   return (
-    <main className="min-h-screen bg-slate-950 text-white">
+    <main className="min-h-screen bg-slate-950 p-6 text-white">
+      <div className="mx-auto max-w-3xl">
+        <a
+          href={`/hal/stok/${stok.id}`}
+          className="text-sm text-cyan-400 hover:underline"
+        >
+          ← Stok detayına dön
+        </a>
 
-      <div className="mx-auto max-w-3xl px-4 py-8 md:px-6">
+        <h1 className="mt-4 text-3xl font-bold">
+          {stok.ad} — Stok hareketi
+        </h1>
 
-        {/* BAŞLIK */}
-
-        <div className="mb-8 flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-
-          <div>
-
-            <p className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-400">
-              Hal Komisyon & Soğuk Hava
-            </p>
-
-            <h1 className="mt-2 text-3xl font-black md:text-4xl">
-
-              {giris
-                ? "Stok Girişi"
-                : "Stok Çıkışı"}
-
-            </h1>
-
-            <p className="mt-2 text-slate-400">
-              {stok.kod} - {stok.ad}
-            </p>
-
-          </div>
-
-          <a
-  href={`/hal/stok/${stok.id}`}
-  className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-bold text-slate-300 hover:bg-slate-900"
->
-  ← Stok Detayı
-</a>
-
-        </div>
-
-        {/* STOK BİLGİSİ */}
-
-        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-5">
-
-          <div className="grid gap-4 sm:grid-cols-3">
-
-            <div>
-
-              <p className="text-xs text-slate-500">
-                Ürün
-              </p>
-
-              <p className="mt-1 font-black">
-                {stok.ad}
-              </p>
-
-            </div>
-
-            <div>
-
-              <p className="text-xs text-slate-500">
-                Mevcut Stok
-              </p>
-
-              <p
-                className={`mt-1 text-xl font-black ${
-                  Number(
-                    stok.mevcutMiktar
-                  ) > 0
-                    ? "text-emerald-400"
-                    : "text-red-400"
-                }`}
-              >
-                {number(
-                  Number(
-                    stok.mevcutMiktar
-                  )
-                )}{" "}
-                {stok.birim}
-              </p>
-
-            </div>
-
-            <div>
-
-              <p className="text-xs text-slate-500">
-                İşlem
-              </p>
-
-              <p
-                className={`mt-1 font-black ${
-                  giris
-                    ? "text-emerald-400"
-                    : "text-red-400"
-                }`}
-              >
-                {giris
-                  ? "GİRİŞ"
-                  : "ÇIKIŞ"}
-              </p>
-
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* GİRİŞ / ÇIKIŞ SEÇİMİ */}
-
-        <div className="mb-5 grid grid-cols-2 gap-3">
-
-          <a
-            href={`/hal/stok/${stok.id}/hareket?tip=GIRIS`}
-            className={`rounded-xl border px-5 py-4 text-center font-black transition ${
-              giris
-                ? "border-emerald-500 bg-emerald-950/20 text-emerald-400"
-                : "border-slate-800 bg-slate-900 text-slate-400"
-            }`}
-          >
-            + Stok Girişi
-          </a>
-
-          <a
-            href={`/hal/stok/${stok.id}/hareket?tip=CIKIS`}
-            className={`rounded-xl border px-5 py-4 text-center font-black transition ${
-              !giris
-                ? "border-red-500 bg-red-950/20 text-red-400"
-                : "border-slate-800 bg-slate-900 text-slate-400"
-            }`}
-          >
-            − Stok Çıkışı
-          </a>
-
-        </div>
-
-        {/* HATA */}
+        <p className="mt-2 text-slate-400">
+          Mevcut miktar: {number(Number(stok.mevcutMiktar))} {stok.birim}
+        </p>
 
         {query.error && (
-          <div className="mb-5 rounded-xl border border-red-800 bg-red-950/30 p-4 font-semibold text-red-300">
+          <p className="mt-4 rounded-xl border border-red-500/40 bg-red-500/10 p-3 text-red-300">
             {query.error}
-          </div>
+          </p>
         )}
-
-        {/* FORM */}
 
         <form
           action={hareketKaydet}
-          className="rounded-2xl border border-slate-800 bg-slate-900 p-6 md:p-8"
+          className="mt-6 space-y-5 rounded-2xl border border-slate-800 bg-slate-900 p-6"
         >
-
-          <input
-            type="hidden"
-            name="tip"
-            value={tip}
-          />
-
-          <div className="grid gap-5 md:grid-cols-2">
-
-            {/* TARİH */}
-
-            <div>
-
-              <label
-                className={
-                  labelClass
-                }
-              >
-                Tarih *
-              </label>
-
-              <input
-                type="date"
-                name="tarih"
-                defaultValue={
-                  bugun
-                }
-                required
-                className={
-                  inputClass
-                }
-              />
-
-            </div>
-
-            {/* MİKTAR */}
-
-            <div>
-
-              <label
-                className={
-                  labelClass
-                }
-              >
-                Miktar *
-              </label>
-
-              <input
-                name="miktar"
-                required
-                inputMode="decimal"
-                placeholder={`Örn: 10 ${stok.birim}`}
-                className={
-                  inputClass
-                }
-              />
-
-              <p className="mt-2 text-xs text-slate-500">
-                Birim: {stok.birim}
-              </p>
-
-            </div>
-
-            {/* BELGE NO */}
-
-            <div className="md:col-span-2">
-
-              <label
-                className={
-                  labelClass
-                }
-              >
-                Belge No
-              </label>
-
-              <input
-                name="belgeNo"
-                placeholder="Varsa fiş, irsaliye veya belge numarası"
-                className={
-                  inputClass
-                }
-              />
-
-            </div>
-
-            {/* AÇIKLAMA */}
-
-            <div className="md:col-span-2">
-
-              <label
-                className={
-                  labelClass
-                }
-              >
-                Açıklama
-              </label>
-
-              <textarea
-                name="aciklama"
-                rows={3}
-                placeholder={
-                  giris
-                    ? "Örn: Depoya manuel ürün girişi"
-                    : "Örn: Sayım farkı / fire / manuel çıkış"
-                }
-                className={
-                  inputClass
-                }
-              />
-
-            </div>
-
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Hareket türü
+            </label>
+            <select name="tip" defaultValue={tip} className={inputClass}>
+              <option value="GIRIS">Stok girişi / alış</option>
+              <option value="CIKIS">Stok çıkışı</option>
+            </select>
           </div>
 
-          {/* BİLGİ */}
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Tarih
+            </label>
+            <input
+              type="date"
+              name="tarih"
+              required
+              defaultValue={new Date().toLocaleDateString("en-CA")}
+              className={inputClass}
+            />
+          </div>
 
-          <div
-            className={`mt-6 rounded-xl border p-4 ${
-              giris
-                ? "border-emerald-900/50 bg-emerald-950/10"
-                : "border-red-900/50 bg-red-950/10"
-            }`}
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Miktar ({stok.birim})
+            </label>
+            <input
+              name="miktar"
+              required
+              inputMode="decimal"
+              placeholder="Örn. 1250 veya 1250,500"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Birim alış fiyatı (TL)
+            </label>
+            <input
+              name="birimFiyat"
+              inputMode="decimal"
+              placeholder="Örn. 12,50"
+              className={inputClass}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Fiyat girildiğinde toplam tutar miktar × birim fiyat olarak hesaplanır.
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Mevcut cari / tedarikçi
+            </label>
+            <select name="cariId" defaultValue="" className={inputClass}>
+              <option value="">Cari seçilmedi</option>
+              {cariler.map((cari) => (
+                <option key={cari.id} value={cari.id}>
+                  {cari.unvan} ({cari.tip})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Yeni tedarikçi adı (isteğe bağlı)
+            </label>
+            <input
+              name="yeniCariUnvan"
+              placeholder="Yeni tedarikçi varsa adını yazın"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Belge numarası
+            </label>
+            <input
+              name="belgeNo"
+              placeholder="Fatura veya irsaliye no"
+              className={inputClass}
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold">
+              Açıklama
+            </label>
+            <textarea
+              name="aciklama"
+              rows={3}
+              placeholder="İşlem açıklaması"
+              className={inputClass}
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-cyan-500 px-5 py-3 font-bold text-slate-950 hover:bg-cyan-400"
           >
-
-            <p
-              className={`font-black ${
-                giris
-                  ? "text-emerald-400"
-                  : "text-red-400"
-              }`}
-            >
-              {giris
-                ? "Stok artacak"
-                : "Stok azalacak"}
-            </p>
-
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-
-              {giris
-                ? "Kaydettiğiniz miktar mevcut stoğa eklenecek ve manuel stok giriş hareketi oluşturulacak."
-                : "Kaydettiğiniz miktar mevcut stoktan düşülecek ve manuel stok çıkış hareketi oluşturulacak."}
-
-            </p>
-
-          </div>
-
-          {/* BUTONLAR */}
-
-          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-
-            <button
-              type="submit"
-              className={`flex-1 rounded-xl px-6 py-4 text-lg font-black transition ${
-                giris
-                  ? "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-                  : "bg-red-600 text-white hover:bg-red-500"
-              }`}
-            >
-              {giris
-                ? "Stok Girişini Kaydet"
-                : "Stok Çıkışını Kaydet"}
-            </button>
-
-            <a
-              href={`/hal/stok/${stok.id}`}
-              className="rounded-xl border border-slate-700 px-6 py-4 text-center font-bold text-slate-300 hover:bg-slate-800"
-            >
-              Vazgeç
-            </a>
-
-          </div>
-
+            Stok hareketini kaydet
+          </button>
         </form>
-
       </div>
-
     </main>
   );
 }
